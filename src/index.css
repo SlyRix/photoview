@@ -1,13 +1,112 @@
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@media screen and (max-width: 768px) {
+  html {
+    touch-action: none;
+  }
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+@layer base {
+  html, body {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply font-body text-christian-text overflow-x-hidden bg-wedding-background;
+  }
+
+  h1, h2, h3, h4 {
+    @apply font-display leading-tight text-christian-text;
+  }
+
+  h1 {
+    @apply text-4xl md:text-5xl;
+  }
+
+  h2 {
+    @apply text-3xl md:text-4xl;
+  }
+
+  h3 {
+    @apply text-2xl md:text-3xl;
+  }
+
+  h4 {
+    @apply text-xl md:text-2xl;
+  }
+}
+
+@layer components {
+  .container {
+    @apply w-full max-w-6xl mx-auto px-4;
+  }
+
+  .btn {
+    @apply inline-block py-3 px-8 rounded-full font-semibold transition-all duration-300 relative overflow-hidden z-10 font-body tracking-wide;
+  }
+
+  .btn-primary {
+    @apply bg-gradient-to-r text-white shadow-md hover:shadow-lg transform hover:-translate-y-0.5;
+  }
+
+  .btn-christian {
+    @apply from-christian-accent to-christian-accent/90 text-white;
+  }
+
+  .btn-hindu {
+    @apply from-hindu-accent to-hindu-accent/90 text-white;
+  }
+
+  .btn-outline {
+    @apply border-2 bg-transparent shadow-none;
+  }
+
+  .btn-christian-outline {
+    @apply border-christian-accent text-christian-accent hover:bg-christian-accent hover:text-white;
+  }
+
+  .btn-hindu-outline {
+    @apply border-hindu-accent text-hindu-accent hover:bg-hindu-accent hover:text-white;
+  }
+}
+
+/* Enhanced shadows */
+.shadow-elegant {
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.03);
+}
+
+.shadow-card {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+}
+
+/* Text shadow for better readability on images */
+.text-shadow {
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.text-shadow-sm {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* Photo animation */
+.photo-hover {
+  @apply transition-all duration-300 ease-in-out;
+}
+
+.photo-hover:hover {
+  @apply -translate-y-1 shadow-lg;
+}
+
+/* Gradient text */
+.gradient-text {
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  background-image: linear-gradient(to right, #b08968, #d93f0b);
 }

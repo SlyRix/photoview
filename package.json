@@ -1,16 +1,16 @@
 {
-  "name": "photo-view",
-  "version": "0.1.0",
+  "name": "wedding-photo-view",
+  "version": "1.0.0",
   "private": true,
   "dependencies": {
-    "@testing-library/dom": "^10.4.0",
-    "@testing-library/jest-dom": "^6.6.3",
-    "@testing-library/react": "^16.3.0",
-    "@testing-library/user-event": "^13.5.0",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.21.3",
     "react-scripts": "5.0.1",
-    "web-vitals": "^2.1.4"
+    "framer-motion": "^10.18.0",
+    "@mdi/react": "^1.6.1",
+    "@mdi/js": "^7.4.47",
+    "axios": "^1.6.5"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -35,5 +35,10 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.17",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.3"
   }
 }
