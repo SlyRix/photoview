@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Base URL for the server
-const BASE_URL = 'https://photo-view.slyrix.com';
+const BASE_URL = '//photo-view.slyrix.com';
 
 // Create axios instance with base configuration
 const api = axios.create({

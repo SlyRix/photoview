@@ -6,7 +6,7 @@ import Icon from '@mdi/react';
 import { mdiHeartOutline, mdiImageMultiple, mdiRefresh, mdiAlert, mdiCamera } from '@mdi/js';
 
 // Base URL for the server
-const BASE_URL = 'https://photo-view.slyrix.com';
+const BASE_URL = '//photo-view.slyrix.com';
 
 const Gallery = () => {
     const [photos, setPhotos] = useState([]);

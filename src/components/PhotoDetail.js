@@ -18,7 +18,7 @@ import {
 } from '@mdi/js';
 
 // Base URL for the server
-const BASE_URL = 'https://photo-view.slyrix.com';
+const BASE_URL = '//photo-view.slyrix.com';
 
 const PhotoDetail = () => {
     const {photoId} = useParams();
@@ -188,7 +188,7 @@ const PhotoDetail = () => {
 
     // Go to photo booth app
     const handleTakeMorePhotos = () => {
-        window.location.href = "https://photobooth.example.com"; // Replace with your photo booth URL
+        window.location.href = "//photobooth.example.com"; // Replace with your photo booth URL
     };
 
     // If loading, show loading component
