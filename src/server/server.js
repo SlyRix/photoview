@@ -168,6 +168,44 @@ app.get('/photos', async (req, res) => {
         res.status(500).json({ success: false, error: 'Failed to retrieve photos' });
     }
 });
+app.get('/api/photos', async (req, res) => {
+    try {
+        const photoFiles = await fs.readdir(PHOTOS_DIR);
+
+        // Filter out any non-image files and frame images
+        const imageRegex = /\.(jpg|jpeg|png|gif)$/i;
+        const photos = photoFiles
+            .filter(file => imageRegex.test(file) && !file.includes('wedding-frame'))
+            .map(filename => {
+                // Try to read metadata if available
+                let metadata = {};
+                try {
+                    const metadataPath = path.join(DATA_DIR, `${filename}.json`);
+                    if (fs.existsSync(metadataPath)) {
+                        metadata = fs.readJsonSync(metadataPath);
+                    }
+                } catch (err) {
+                    console.warn(`Error reading metadata for ${filename}:`, err.message);
+                }
+
+                return {
+                    filename,
+                    photoId: filename,
+                    url: `/photos/${filename}`,
+                    thumbnailUrl: `/thumbnails/thumb_${filename}`,
+                    timestamp: metadata.timestamp || metadata.serverTimestamp || Date.now(),
+                    ...metadata
+                };
+            })
+            // Sort by timestamp, newest first
+            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+        res.json(photos);
+    } catch (err) {
+        console.error('Error fetching photos:', err);
+        res.status(500).json({ success: false, error: 'Failed to retrieve photos' });
+    }
+});
 
 // Upload endpoint with improved error handling
 app.post('/api/upload-photo', checkApiKey, (req, res) => {

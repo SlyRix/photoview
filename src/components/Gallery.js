@@ -23,9 +23,9 @@ const Gallery = () => {
             setLoading(true);
             setError(null);
 
-            console.log(`Fetching photos from ${BASE_URL}/photos`);
+            console.log(`Fetching photos from ${BASE_URL}/photos - Attempt ${retryCount + 1}`);
 
-            const response = await fetch(`${BASE_URL}/photos`);
+            const response = await fetch(`${BASE_URL}/api/photos`);
 
             if (!response.ok) {
                 throw new Error(`Server returned ${response.status}: ${response.statusText}`);
@@ -35,16 +35,30 @@ const Gallery = () => {
             console.log('Photos response:', data);
 
             if (data && Array.isArray(data)) {
+
                 // Process photos to ensure they have full URLs
                 const processedPhotos = data.map(photo => ({
                     ...photo,
                     id: photo.filename || photo.photoId,
+
                     url: photo.url
                         ? (photo.url.startsWith('http') ? photo.url : `${BASE_URL}${photo.url}`)
                         : `${BASE_URL}/photos/${photo.filename || photo.photoId}`,
-                    thumbnailUrl: photo.thumbnailUrl
-                        ? (photo.thumbnailUrl.startsWith('http') ? photo.thumbnailUrl : `${BASE_URL}${photo.thumbnailUrl}`)
-                        : `${BASE_URL}/thumbnails/thumb_${photo.filename || photo.photoId}`
+                    thumbnailUrl: (() => {
+                        let url = photo.thumbnailUrl;
+
+                        if (url) {
+                            // Remove all occurrences of "original_" no matter what
+                            url = url.replace(/original_/g, '');
+                            // If it's a relative path, prepend BASE_URL
+                            return url.startsWith('http') ? url : `${BASE_URL}${url}`;
+                        }
+
+                        // Fallback if no thumbnailUrl is provided
+                        const rawName = photo.filename || photo.photoId;
+                        const sanitizedName = rawName.replace(/original_/g, '');
+                        return `${BASE_URL}/thumbnails/thumb_${sanitizedName}`;
+                    })()
                 }));
 
                 setPhotos(processedPhotos);
@@ -62,7 +76,6 @@ const Gallery = () => {
         }
     }, []);
 
-    // Fetch photos when component mounts or when retry is triggered
     useEffect(() => {
         fetchPhotos();
     }, [fetchPhotos, retryCount]);
