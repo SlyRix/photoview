@@ -2,9 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import PhotoCard from './PhotoCard';
 import Loading from './Loading';
-import axios from 'axios';
 import Icon from '@mdi/react';
-import { mdiHeartOutline, mdiImageMultiple, mdiRefresh, mdiAlert } from '@mdi/js';
+import { mdiHeartOutline, mdiImageMultiple, mdiRefresh, mdiAlert, mdiCamera } from '@mdi/js';
 
 // Base URL for the server
 const BASE_URL = 'https://photo-view.slyrix.com';
@@ -15,7 +14,8 @@ const Gallery = () => {
     const [error, setError] = useState(null);
     const [retryCount, setRetryCount] = useState(0);
     const [currentPage, setCurrentPage] = useState(1);
-    const photosPerPage = 12;
+    const photosPerPage = 8; // Reduced for mobile
+    const [lastUpdated, setLastUpdated] = useState(null);
 
     // Fetch photos function with improved error handling
     const fetchPhotos = useCallback(async () => {
@@ -25,15 +25,18 @@ const Gallery = () => {
 
             console.log(`Fetching photos from ${BASE_URL}/photos`);
 
-            const response = await axios.get(`${BASE_URL}/photos`, {
-                timeout: 15000 // Increased timeout for slower connections
-            });
+            const response = await fetch(`${BASE_URL}/photos`);
 
-            console.log('Photos response:', response.data);
+            if (!response.ok) {
+                throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+            }
 
-            if (response.data && Array.isArray(response.data)) {
+            const data = await response.json();
+            console.log('Photos response:', data);
+
+            if (data && Array.isArray(data)) {
                 // Process photos to ensure they have full URLs
-                const processedPhotos = response.data.map(photo => ({
+                const processedPhotos = data.map(photo => ({
                     ...photo,
                     id: photo.filename || photo.photoId,
                     url: photo.url
@@ -45,26 +48,15 @@ const Gallery = () => {
                 }));
 
                 setPhotos(processedPhotos);
+                setLastUpdated(new Date());
             } else {
                 // Handle unexpected response format
-                console.warn('Unexpected response format:', response.data);
+                console.warn('Unexpected response format:', data);
                 setError('Received unexpected data format from server');
             }
         } catch (err) {
             console.error('Error fetching photos:', err);
-
-            // More detailed error message based on the error type
-            if (err.response) {
-                // The request was made and the server responded with a status code
-                // that falls out of the range of 2xx
-                setError(`Server error: ${err.response.status} - ${err.response.data.message || 'Unknown error'}`);
-            } else if (err.request) {
-                // The request was made but no response was received
-                setError('No response from server. Please check your internet connection.');
-            } else {
-                // Something happened in setting up the request that triggered an Error
-                setError(`Error: ${err.message}`);
-            }
+            setError(`Could not load photos: ${err.message}`);
         } finally {
             setLoading(false);
         }
@@ -75,9 +67,23 @@ const Gallery = () => {
         fetchPhotos();
     }, [fetchPhotos, retryCount]);
 
+    // Auto-refresh photos every 30 seconds
+    useEffect(() => {
+        const interval = setInterval(() => {
+            fetchPhotos();
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, [fetchPhotos]);
+
     // Handle retry button click
     const handleRetry = () => {
         setRetryCount(prev => prev + 1);
+    };
+
+    // Handle going to photo booth
+    const handleTakeMorePhotos = () => {
+        window.location.href = "https://photobooth.example.com"; // Replace with your photo booth URL
     };
 
     // Calculate pagination
@@ -116,12 +122,12 @@ const Gallery = () => {
     };
 
     // If loading, show loading component
-    if (loading) {
+    if (loading && photos.length === 0) {
         return <Loading message="Loading wedding photos..." />;
     }
 
     // If error, show error message with retry button
-    if (error) {
+    if (error && photos.length === 0) {
         return (
             <div className="container mx-auto py-16 px-4 text-center">
                 <div className="text-6xl text-red-500/50 mb-6">
@@ -147,21 +153,31 @@ const Gallery = () => {
                 <Icon path={mdiImageMultiple} size={3} className="text-christian-accent/40 mx-auto mb-4" />
                 <h2 className="text-2xl font-bold mb-4">No Photos Yet</h2>
                 <p className="text-gray-600 mb-6">Photos will appear here once they've been uploaded.</p>
-                <button
-                    onClick={handleRetry}
-                    className="btn btn-outline btn-christian-outline flex items-center mx-auto"
-                >
-                    <Icon path={mdiRefresh} size={1} className="mr-2" />
-                    Check Again
-                </button>
+                <div className="flex flex-col space-y-4">
+                    <button
+                        onClick={handleRetry}
+                        className="btn btn-outline btn-christian-outline flex items-center mx-auto"
+                    >
+                        <Icon path={mdiRefresh} size={1} className="mr-2" />
+                        Check Again
+                    </button>
+
+                    <button
+                        onClick={handleTakeMorePhotos}
+                        className="btn btn-primary btn-christian flex items-center mx-auto"
+                    >
+                        <Icon path={mdiCamera} size={1} className="mr-2" />
+                        Take Photos
+                    </button>
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="container mx-auto py-8 px-4">
+        <div className="container mx-auto py-6 px-4">
             {/* Gallery header */}
-            <div className="text-center mb-10">
+            <div className="text-center mb-8">
                 <motion.h2
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -188,13 +204,33 @@ const Gallery = () => {
                 >
                     Browse photos from Rushel & Sivani's special day
                 </motion.p>
+
+                {/* Take More Photos Button */}
+                <motion.button
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.8, delay: 0.6 }}
+                    onClick={handleTakeMorePhotos}
+                    className="mt-4 btn btn-primary btn-christian flex items-center mx-auto"
+                >
+                    <Icon path={mdiCamera} size={1} className="mr-2" />
+                    Take More Photos
+                </motion.button>
             </div>
 
             {/* Photo count */}
             <div className="mb-4 text-center">
                 <p className="text-sm text-gray-500">
                     Showing {photos.length} {photos.length === 1 ? 'photo' : 'photos'}
+                    {lastUpdated && ` • Last updated ${lastUpdated.toLocaleTimeString()}`}
                 </p>
+
+                {loading && photos.length > 0 && (
+                    <p className="text-xs text-christian-accent mt-1">
+                        <span className="inline-block animate-spin mr-1">⟳</span> Refreshing...
+                    </p>
+                )}
+
                 <button
                     onClick={handleRetry}
                     className="text-sm text-christian-accent hover:underline flex items-center justify-center mx-auto mt-1"
@@ -204,12 +240,12 @@ const Gallery = () => {
                 </button>
             </div>
 
-            {/* Photo grid */}
+            {/* Photo grid - Optimized for mobile with 2 columns */}
             <motion.div
                 variants={containerVariants}
                 initial="hidden"
                 animate="visible"
-                className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"
+                className="grid grid-cols-2 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 sm:gap-6"
             >
                 {currentPhotos.map((photo, index) => (
                     <motion.div key={photo.id || index} variants={itemVariants}>
@@ -218,9 +254,9 @@ const Gallery = () => {
                 ))}
             </motion.div>
 
-            {/* Pagination */}
+            {/* Pagination - Simplified for mobile */}
             {totalPages > 1 && (
-                <div className="mt-12 flex justify-center">
+                <div className="mt-8 flex justify-center">
                     <nav className="inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
                         {/* Previous page button */}
                         <button
@@ -238,44 +274,89 @@ const Gallery = () => {
                             </svg>
                         </button>
 
-                        {/* Page numbers */}
-                        {[...Array(totalPages)].map((_, i) => {
-                            const pageNumber = i + 1;
-                            const isWithinRange = Math.abs(pageNumber - currentPage) <= 1;
-                            const isEndPage = pageNumber === 1 || pageNumber === totalPages;
+                        {/* Page numbers - Mobile friendly version with limited page numbers */}
+                        {(() => {
+                            const pages = [];
+                            const maxVisiblePages = 3; // Show max 3 pages on mobile
 
-                            // Only show current page, adjacent pages, and first/last pages
-                            if (isWithinRange || isEndPage) {
-                                return (
+                            // Calculate which pages to show
+                            let startPage = Math.max(1, currentPage - 1);
+                            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+                            // Adjust if we're at the end
+                            if (endPage - startPage < maxVisiblePages - 1) {
+                                startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                            }
+
+                            // Always show first page
+                            if (startPage > 1) {
+                                pages.push(
                                     <button
-                                        key={pageNumber}
-                                        onClick={() => goToPage(pageNumber)}
-                                        className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
-                                            currentPage === pageNumber
+                                        key={1}
+                                        onClick={() => goToPage(1)}
+                                        className="relative inline-flex items-center px-3 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+                                    >
+                                        1
+                                    </button>
+                                );
+
+                                // Show ellipsis if needed
+                                if (startPage > 2) {
+                                    pages.push(
+                                        <span
+                                            key="ellipsis-start"
+                                            className="relative inline-flex items-center px-3 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700"
+                                        >
+                                            ...
+                                        </span>
+                                    );
+                                }
+                            }
+
+                            // Add visible page numbers
+                            for (let i = startPage; i <= endPage; i++) {
+                                pages.push(
+                                    <button
+                                        key={i}
+                                        onClick={() => goToPage(i)}
+                                        className={`relative inline-flex items-center px-3 py-2 border text-sm font-medium ${
+                                            currentPage === i
                                                 ? 'z-10 bg-christian-accent border-christian-accent text-white'
                                                 : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
                                         }`}
                                     >
-                                        {pageNumber}
+                                        {i}
                                     </button>
-                                );
-                            } else if (
-                                (pageNumber === currentPage - 2 && currentPage > 3) ||
-                                (pageNumber === currentPage + 2 && currentPage < totalPages - 2)
-                            ) {
-                                // Show ellipsis for gaps
-                                return (
-                                    <span
-                                        key={`ellipsis-${pageNumber}`}
-                                        className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700"
-                                    >
-                    ...
-                  </span>
                                 );
                             }
 
-                            return null;
-                        })}
+                            // Always show last page
+                            if (endPage < totalPages) {
+                                // Show ellipsis if needed
+                                if (endPage < totalPages - 1) {
+                                    pages.push(
+                                        <span
+                                            key="ellipsis-end"
+                                            className="relative inline-flex items-center px-3 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700"
+                                        >
+                                            ...
+                                        </span>
+                                    );
+                                }
+
+                                pages.push(
+                                    <button
+                                        key={totalPages}
+                                        onClick={() => goToPage(totalPages)}
+                                        className="relative inline-flex items-center px-3 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+                                    >
+                                        {totalPages}
+                                    </button>
+                                );
+                            }
+
+                            return pages;
+                        })()}
 
                         {/* Next page button */}
                         <button

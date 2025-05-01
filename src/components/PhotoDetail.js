@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, {useState, useEffect, useCallback} from 'react';
+import {useParams, useNavigate} from 'react-router-dom';
+import {motion, AnimatePresence} from 'framer-motion';
 import Icon from '@mdi/react';
 import Loading from './Loading';
 import {
@@ -8,24 +8,20 @@ import {
     mdiDownload,
     mdiShare,
     mdiClose,
-    mdiChevronLeft,
-    mdiChevronRight,
     mdiImageOff,
     mdiWhatsapp,
     mdiTwitter,
     mdiFacebook,
     mdiEmailOutline,
-    mdiRefresh
+    mdiRefresh,
+    mdiCamera
 } from '@mdi/js';
 
-// Improved API import
-import axios from 'axios';
-
-// Base URL for the server - make sure this is correct
+// Base URL for the server
 const BASE_URL = 'https://photo-view.slyrix.com';
 
 const PhotoDetail = () => {
-    const { photoId } = useParams();
+    const {photoId} = useParams();
     const navigate = useNavigate();
     const [photo, setPhoto] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -49,29 +45,25 @@ const PhotoDetail = () => {
             console.log(`Fetching photo: ${photoId}`);
 
             // First try the API endpoint
-            const response = await axios.get(`${BASE_URL}/photos/${photoId}`);
+            const response = await fetch(`${BASE_URL}/photos/${photoId}`);
 
-            if (response.data) {
-                console.log('Photo data received:', response.data);
+            if (response.ok) {
+                const data = await response.json();
+                console.log('Photo data received:', data);
                 const photoData = {
-                    ...response.data,
+                    ...data,
                     id: photoId,
                     url: `${BASE_URL}/photos/${photoId}`,
-                    thumbnailUrl: response.data.thumbnailUrl
-                        ? `${BASE_URL}${response.data.thumbnailUrl}`
+                    thumbnailUrl: data.thumbnailUrl
+                        ? `${BASE_URL}${data.thumbnailUrl}`
                         : `${BASE_URL}/thumbnails/thumb_${photoId}`
                 };
 
                 setPhoto(photoData);
                 setLoading(false);
                 return;
-            }
-        } catch (apiError) {
-            console.error('API error:', apiError);
-
-            // If API fails, try to access the image directly
-            try {
-                // Test if the image exists by creating a dummy image element
+            } else {
+                // If API fails, try to access the image directly
                 const testImg = new Image();
                 testImg.onload = () => {
                     // Image exists, construct basic photo object
@@ -90,11 +82,11 @@ const PhotoDetail = () => {
                 };
 
                 testImg.src = `${BASE_URL}/photos/${photoId}`;
-            } catch (directError) {
-                console.error('Direct access error:', directError);
-                setError('Photo not found. It may not have been uploaded yet.');
-                setLoading(false);
             }
+        } catch (error) {
+            console.error('Error fetching photo:', error);
+            setError('Photo not found. It may not have been uploaded yet.');
+            setLoading(false);
         }
     }, [photoId]);
 
@@ -194,9 +186,14 @@ const PhotoDetail = () => {
         setScale(1);
     };
 
+    // Go to photo booth app
+    const handleTakeMorePhotos = () => {
+        window.location.href = "https://photobooth.example.com"; // Replace with your photo booth URL
+    };
+
     // If loading, show loading component
     if (loading) {
-        return <Loading message="Loading photo..." />;
+        return <Loading message="Loading photo..."/>;
     }
 
     // If error, show error message with retry button
@@ -204,7 +201,7 @@ const PhotoDetail = () => {
         return (
             <div className="container mx-auto py-16 px-4 text-center">
                 <div className="text-6xl text-gray-300 mb-6">
-                    <Icon path={mdiImageOff} size={4} className="mx-auto" />
+                    <Icon path={mdiImageOff} size={4} className="mx-auto"/>
                 </div>
                 <h2 className="text-2xl font-bold mb-4">Photo Not Found</h2>
                 <p className="text-gray-600 mb-8">{error || "We couldn't find the requested photo."}</p>
@@ -213,7 +210,7 @@ const PhotoDetail = () => {
                         onClick={handleRetry}
                         className="btn btn-primary btn-christian flex items-center"
                     >
-                        <Icon path={mdiRefresh} size={1} className="mr-2" />
+                        <Icon path={mdiRefresh} size={1} className="mr-2"/>
                         Retry Loading
                     </button>
                     <button
@@ -232,34 +229,35 @@ const PhotoDetail = () => {
             <div className="container mx-auto max-w-5xl">
                 {/* Back button */}
                 <motion.button
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.5 }}
+                    initial={{opacity: 0, x: -20}}
+                    animate={{opacity: 1, x: 0}}
+                    transition={{duration: 0.5}}
                     onClick={handleBack}
                     className="flex items-center text-gray-600 hover:text-christian-accent mb-6 transition-colors"
                 >
-                    <Icon path={mdiArrowLeft} size={1} className="mr-2" />
+                    <Icon path={mdiArrowLeft} size={1} className="mr-2"/>
                     <span>Back to Gallery</span>
                 </motion.button>
 
                 {/* Main content */}
                 <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.2 }}
+                    initial={{opacity: 0, y: 20}}
+                    animate={{opacity: 1, y: 0}}
+                    transition={{duration: 0.5, delay: 0.2}}
                     className="bg-white rounded-lg shadow-elegant overflow-hidden"
                 >
                     {/* Photo container */}
                     <div
                         className="relative bg-gray-100 flex items-center justify-center overflow-hidden"
-                        style={{ minHeight: '300px' }}
+                        style={{minHeight: '300px'}}
                         onClick={handleDoubleTap}
                         onDoubleClick={resetZoom}
                     >
                         {/* Loading placeholder */}
                         {!imageLoaded && (
                             <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
-                                <div className="animate-spin rounded-full h-12 w-12 border-4 border-t-wedding-love border-r-wedding-love border-b-transparent border-l-transparent"></div>
+                                <div
+                                    className="animate-spin rounded-full h-12 w-12 border-4 border-t-wedding-love border-r-wedding-love border-b-transparent border-l-transparent"></div>
                             </div>
                         )}
 
@@ -268,8 +266,8 @@ const PhotoDetail = () => {
                             src={photo.url}
                             alt="Wedding photo"
                             className="max-w-full max-h-[70vh] object-contain"
-                            animate={{ scale }}
-                            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                            animate={{scale}}
+                            transition={{type: 'spring', stiffness: 300, damping: 30}}
                             onLoad={() => setImageLoaded(true)}
                             onError={() => {
                                 setImageLoaded(true);
@@ -279,10 +277,10 @@ const PhotoDetail = () => {
 
                         {/* Mobile zoom indicator - only show briefly */}
                         <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            transition={{ delay: 1, duration: 4 }}
+                            initial={{opacity: 0}}
+                            animate={{opacity: 1}}
+                            exit={{opacity: 0}}
+                            transition={{delay: 1, duration: 4}}
                             className="absolute bottom-4 left-0 right-0 text-center text-xs text-gray-500 pointer-events-none"
                         >
                             Double-tap to zoom
@@ -303,11 +301,22 @@ const PhotoDetail = () => {
                             </div>
 
                             {/* Action buttons */}
-                            <div className="flex space-x-3">
+                            <div className="flex flex-wrap gap-3">
+                                {/* Take More Photos button */}
+                                <motion.button
+                                    whileHover={{scale: 1.05}}
+                                    whileTap={{scale: 0.95}}
+                                    onClick={handleTakeMorePhotos}
+                                    className="btn btn-outline flex items-center text-sm px-4 py-2 rounded-full border border-gray-300 bg-white shadow-sm"
+                                >
+                                    <Icon path={mdiCamera} size={0.8} className="mr-2"/>
+                                    <span>Take More Photos</span>
+                                </motion.button>
+
                                 {/* Share button */}
                                 <motion.button
-                                    whileHover={{ scale: 1.05 }}
-                                    whileTap={{ scale: 0.95 }}
+                                    whileHover={{scale: 1.05}}
+                                    whileTap={{scale: 0.95}}
                                     onClick={handleShare}
                                     className="btn btn-primary btn-hindu flex items-center"
                                 >
@@ -315,22 +324,22 @@ const PhotoDetail = () => {
                                         {shareSuccess ? (
                                             <motion.div
                                                 key="success"
-                                                initial={{ scale: 0.5, opacity: 0 }}
-                                                animate={{ scale: 1, opacity: 1 }}
-                                                exit={{ scale: 0.5, opacity: 0 }}
+                                                initial={{scale: 0.5, opacity: 0}}
+                                                animate={{scale: 1, opacity: 1}}
+                                                exit={{scale: 0.5, opacity: 0}}
                                                 className="mr-2"
                                             >
-                                                <Icon path={mdiClose} size={1} />
+                                                <Icon path={mdiClose} size={1}/>
                                             </motion.div>
                                         ) : (
                                             <motion.div
                                                 key="share"
-                                                initial={{ scale: 0.5, opacity: 0 }}
-                                                animate={{ scale: 1, opacity: 1 }}
-                                                exit={{ scale: 0.5, opacity: 0 }}
+                                                initial={{scale: 0.5, opacity: 0}}
+                                                animate={{scale: 1, opacity: 1}}
+                                                exit={{scale: 0.5, opacity: 0}}
                                                 className="mr-2"
                                             >
-                                                <Icon path={mdiShare} size={1} />
+                                                <Icon path={mdiShare} size={1}/>
                                             </motion.div>
                                         )}
                                     </AnimatePresence>
@@ -339,8 +348,8 @@ const PhotoDetail = () => {
 
                                 {/* Download button */}
                                 <motion.button
-                                    whileHover={{ scale: 1.05 }}
-                                    whileTap={{ scale: 0.95 }}
+                                    whileHover={{scale: 1.05}}
+                                    whileTap={{scale: 0.95}}
                                     onClick={handleDownload}
                                     className="btn btn-outline btn-christian-outline flex items-center"
                                 >
@@ -348,24 +357,27 @@ const PhotoDetail = () => {
                                         {downloadSuccess ? (
                                             <motion.div
                                                 key="success"
-                                                initial={{ scale: 0.5, opacity: 0 }}
-                                                animate={{ scale: 1, opacity: 1 }}
-                                                exit={{ scale: 0.5, opacity: 0 }}
+                                                initial={{scale: 0.5, opacity: 0}}
+                                                animate={{scale: 1, opacity: 1}}
+                                                exit={{scale: 0.5, opacity: 0}}
                                                 className="mr-2 text-green-500"
                                             >
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5"
+                                                     viewBox="0 0 20 20" fill="currentColor">
+                                                    <path fillRule="evenodd"
+                                                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                                          clipRule="evenodd"/>
                                                 </svg>
                                             </motion.div>
                                         ) : (
                                             <motion.div
                                                 key="download"
-                                                initial={{ scale: 0.5, opacity: 0 }}
-                                                animate={{ scale: 1, opacity: 1 }}
-                                                exit={{ scale: 0.5, opacity: 0 }}
+                                                initial={{scale: 0.5, opacity: 0}}
+                                                animate={{scale: 1, opacity: 1}}
+                                                exit={{scale: 0.5, opacity: 0}}
                                                 className="mr-2"
                                             >
-                                                <Icon path={mdiDownload} size={1} />
+                                                <Icon path={mdiDownload} size={1}/>
                                             </motion.div>
                                         )}
                                     </AnimatePresence>
@@ -380,16 +392,16 @@ const PhotoDetail = () => {
                 <AnimatePresence>
                     {shareOpen && (
                         <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
+                            initial={{opacity: 0}}
+                            animate={{opacity: 1}}
+                            exit={{opacity: 0}}
                             className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
                             onClick={() => setShareOpen(false)}
                         >
                             <motion.div
-                                initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                                animate={{ opacity: 1, scale: 1, y: 0 }}
-                                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                                initial={{opacity: 0, scale: 0.9, y: 20}}
+                                animate={{opacity: 1, scale: 1, y: 0}}
+                                exit={{opacity: 0, scale: 0.9, y: 20}}
                                 className="bg-white rounded-lg shadow-lg max-w-md w-full p-6"
                                 onClick={(e) => e.stopPropagation()}
                             >
@@ -399,73 +411,77 @@ const PhotoDetail = () => {
                                         onClick={() => setShareOpen(false)}
                                         className="text-gray-500 hover:text-gray-700"
                                     >
-                                        <Icon path={mdiClose} size={1} />
+                                        <Icon path={mdiClose} size={1}/>
                                     </button>
                                 </div>
 
                                 <div className="flex justify-around mb-6">
                                     {/* WhatsApp */}
-                                    <a
-                                        href={`https://wa.me/?text=${encodeURIComponent('Check out this photo from Rushel & Sivani\'s wedding! ' + window.location.href)}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex flex-col items-center text-gray-700 hover:text-green-600"
-                                        onClick={() => {
-                                            setShareSuccess(true);
-                                            setShareOpen(false);
-                                        }}
-                                    >
-                                        <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center mb-2">
-                                            <Icon path={mdiWhatsapp} size={1.2} />
+
+                                    href={`https://wa.me/?text=${encodeURIComponent('Check out this photo from Rushel & Sivani\'s wedding! ' + window.location.href)}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex flex-col items-center text-gray-700 hover:text-green-600"
+                                    onClick={() => {
+                                    setShareSuccess(true);
+                                    setShareOpen(false);
+                                }}
+                                    <a>
+                                        <div
+                                            className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center mb-2">
+                                            <Icon path={mdiWhatsapp} size={1.2}/>
                                         </div>
                                         <span className="text-xs">WhatsApp</span>
                                     </a>
 
                                     {/* Facebook */}
-                                    <a
-                                        href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex flex-col items-center text-gray-700 hover:text-blue-600"
-                                        onClick={() => {
-                                            setShareSuccess(true);
-                                            setShareOpen(false);
-                                        }}
-                                    >
-                                        <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center mb-2">
-                                            <Icon path={mdiFacebook} size={1.2} />
+
+                                    href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex flex-col items-center text-gray-700 hover:text-blue-600"
+                                    onClick={() => {
+                                    setShareSuccess(true);
+                                    setShareOpen(false);
+                                }}
+                                    <a>
+                                        <div
+                                            className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center mb-2">
+                                            <Icon path={mdiFacebook} size={1.2}/>
                                         </div>
                                         <span className="text-xs">Facebook</span>
                                     </a>
 
                                     {/* Twitter/X */}
-                                    <a
-                                        href={`https://twitter.com/intent/tweet?text=${encodeURIComponent('Check out this photo from Rushel & Sivani\'s wedding! ' + window.location.href)}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex flex-col items-center text-gray-700 hover:text-sky-600"
-                                        onClick={() => {
-                                            setShareSuccess(true);
-                                            setShareOpen(false);
-                                        }}
-                                    >
-                                        <div className="h-12 w-12 rounded-full bg-sky-100 flex items-center justify-center mb-2">
-                                            <Icon path={mdiTwitter} size={1.2} />
+
+                                    href={`https://twitter.com/intent/tweet?text=${encodeURIComponent('Check out this photo from Rushel & Sivani\'s wedding! ' + window.location.href)}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex flex-col items-center text-gray-700 hover:text-sky-600"
+                                    onClick={() => {
+                                    setShareSuccess(true);
+                                    setShareOpen(false);
+                                }}
+                                    <a>
+                                        <div
+                                            className="h-12 w-12 rounded-full bg-sky-100 flex items-center justify-center mb-2">
+                                            <Icon path={mdiTwitter} size={1.2}/>
                                         </div>
                                         <span className="text-xs">Twitter</span>
                                     </a>
 
                                     {/* Email */}
-                                    <a
-                                        href={`mailto:?subject=Wedding Photo&body=${encodeURIComponent('Check out this photo from Rushel & Sivani\'s wedding!\n\n' + window.location.href)}`}
-                                        className="flex flex-col items-center text-gray-700 hover:text-gray-900"
-                                        onClick={() => {
-                                            setShareSuccess(true);
-                                            setShareOpen(false);
-                                        }}
-                                    >
-                                        <div className="h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center mb-2">
-                                            <Icon path={mdiEmailOutline} size={1.2} />
+
+                                    href={`mailto:?subject=Wedding Photo&body=${encodeURIComponent('Check out this photo from Rushel & Sivani\'s wedding!\n\n' + window.location.href)}`}
+                                    className="flex flex-col items-center text-gray-700 hover:text-gray-900"
+                                    onClick={() => {
+                                    setShareSuccess(true);
+                                    setShareOpen(false);
+                                }}
+                                    <a>
+                                        <div
+                                            className="h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center mb-2">
+                                            <Icon path={mdiEmailOutline} size={1.2}/>
                                         </div>
                                         <span className="text-xs">Email</span>
                                     </a>

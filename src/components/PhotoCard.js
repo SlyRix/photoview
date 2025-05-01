@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import Icon from '@mdi/react';
-import { mdiImage, mdiClock, mdiReload } from '@mdi/js';
+import { mdiImage, mdiClock, mdiReload, mdiFire } from '@mdi/js';
 
 const PhotoCard = ({ photo }) => {
     const [isLoading, setIsLoading] = useState(true);
@@ -23,6 +23,16 @@ const PhotoCard = ({ photo }) => {
         } catch (e) {
             return 'Unknown date';
         }
+    };
+
+    // Check if photo was taken recently (within last 10 minutes)
+    const isRecentlyTaken = () => {
+        if (!photo.timestamp) return false;
+
+        const photoTime = new Date(photo.timestamp).getTime();
+        const tenMinutesAgo = Date.now() - (10 * 60 * 1000);
+
+        return photoTime > tenMinutesAgo;
     };
 
     // Handle image load error
@@ -50,8 +60,16 @@ const PhotoCard = ({ photo }) => {
         <motion.div
             whileHover={{ y: -5 }}
             whileTap={{ scale: 0.98 }}
-            className="bg-white rounded-lg shadow-card overflow-hidden photo-hover"
+            className="bg-white rounded-lg shadow-card overflow-hidden photo-hover relative"
         >
+            {/* Recently taken indicator */}
+            {isRecentlyTaken() && (
+                <div className="absolute top-2 right-2 z-10 bg-wedding-love text-white text-xs px-2 py-1 rounded-full flex items-center">
+                    <Icon path={mdiFire} size={0.6} className="mr-1" />
+                    <span>New</span>
+                </div>
+            )}
+
             <Link to={`/photo/${photo.id || photo.filename}`} className="block h-full">
                 <div className="aspect-[4/3] w-full overflow-hidden relative">
                     {/* Loading state */}

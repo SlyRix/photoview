@@ -29,24 +29,31 @@ api.interceptors.response.use(
  * @returns {Promise} Promise that resolves to photo array
  */
 export const getPhotos = async () => {
-    try {
-        const response = await api.get('/photos');
+    let retries = 3;
+    while (retries > 0) {
+        try {
+            const response = await api.get('/photos');
 
-        // Process photos to ensure they have full URLs
-        return response.data.map(photo => ({
-            ...photo,
-            id: photo.filename || photo.photoId,
-            url: `${BASE_URL}/photos/${photo.filename || photo.photoId}`,
-            thumbnailUrl: photo.thumbnailUrl
-                ? `${BASE_URL}${photo.thumbnailUrl}`
-                : `${BASE_URL}/thumbnails/thumb_${photo.filename || photo.photoId}`
-        }));
-    } catch (error) {
-        console.error('Error fetching photos:', error);
-        return [];
+            // Process photos to ensure they have full URLs
+            return response.data.map(photo => ({
+                ...photo,
+                id: photo.filename || photo.photoId,
+                url: `${BASE_URL}/photos/${photo.filename || photo.photoId}`,
+                thumbnailUrl: photo.thumbnailUrl
+                    ? `${BASE_URL}${photo.thumbnailUrl}`
+                    : `${BASE_URL}/thumbnails/thumb_${photo.filename || photo.photoId}`
+            }));
+        } catch (error) {
+            retries--;
+            if (retries === 0) {
+                console.error('Error fetching photos after multiple attempts:', error);
+                return [];
+            }
+            // Wait before retrying
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        }
     }
 };
-
 
 /**
  * Get a specific photo by ID

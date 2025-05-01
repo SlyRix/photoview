@@ -1,10 +1,13 @@
+// Updated src/components/Header.js
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import Icon from '@mdi/react';
-import { mdiImage, mdiHeart } from '@mdi/js';
+import { mdiImage, mdiHeart, mdiHome, mdiCamera } from '@mdi/js';
 
 const Header = () => {
+    const location = useLocation();
+
     return (
         <header className="bg-white shadow-md">
             <div className="container mx-auto py-4 px-4 flex justify-between items-center">
@@ -26,13 +29,31 @@ const Header = () => {
                     </div>
                 </Link>
 
-                <Link
-                    to="/"
-                    className="flex items-center space-x-1 text-christian-accent hover:text-hindu-accent transition-colors"
-                >
-                    <Icon path={mdiImage} size={1} />
-                    <span className="hidden md:inline">Photo Gallery</span>
-                </Link>
+                <div className="flex items-center space-x-4">
+                    <Link
+                        to="/"
+                        className={`flex items-center space-x-1 transition-colors ${
+                            location.pathname === '/'
+                                ? 'text-christian-accent'
+                                : 'text-gray-500 hover:text-christian-accent'
+                        }`}
+                    >
+                        <Icon path={mdiHome} size={0.9} />
+                        <span className="hidden md:inline text-sm">Home</span>
+                    </Link>
+
+                    <Link
+                        to="/gallery"
+                        className={`flex items-center space-x-1 transition-colors ${
+                            location.pathname === '/gallery'
+                                ? 'text-christian-accent'
+                                : 'text-gray-500 hover:text-christian-accent'
+                        }`}
+                    >
+                        <Icon path={mdiImage} size={0.9} />
+                        <span className="hidden md:inline text-sm">Gallery</span>
+                    </Link>
+                </div>
             </div>
 
             {/* Decorative element */}
