@@ -11,6 +11,18 @@ const api = axios.create({
         'Content-Type': 'application/json',
     }
 });
+api.interceptors.response.use(
+    response => response,
+    error => {
+        console.error('API Error:', error.message);
+        // Check if the error has a response
+        if (error.response) {
+            console.error('Status:', error.response.status);
+            console.error('Data:', error.response.data);
+        }
+        return Promise.reject(error);
+    }
+);
 
 /**
  * Get a list of all photos
@@ -18,8 +30,6 @@ const api = axios.create({
  */
 export const getPhotos = async () => {
     try {
-        // Fetch photos directly from the server endpoint
-        // For now, we'll use direct paths without authentication for the public view
         const response = await api.get('/photos');
 
         // Process photos to ensure they have full URLs
@@ -36,6 +46,7 @@ export const getPhotos = async () => {
         return [];
     }
 };
+
 
 /**
  * Get a specific photo by ID

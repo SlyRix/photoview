@@ -1,35 +1,84 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import PhotoCard from './PhotoCard';
 import Loading from './Loading';
-import { getPhotos } from '../utils/api';
+import axios from 'axios';
 import Icon from '@mdi/react';
-import { mdiHeartOutline, mdiImageMultiple } from '@mdi/js';
+import { mdiHeartOutline, mdiImageMultiple, mdiRefresh, mdiAlert } from '@mdi/js';
+
+// Base URL for the server
+const BASE_URL = 'https://photo-view.slyrix.com';
 
 const Gallery = () => {
     const [photos, setPhotos] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [retryCount, setRetryCount] = useState(0);
     const [currentPage, setCurrentPage] = useState(1);
     const photosPerPage = 12;
 
-    // Fetch photos when component mounts
-    useEffect(() => {
-        const fetchPhotoData = async () => {
-            try {
-                setLoading(true);
-                const photoData = await getPhotos();
-                setPhotos(photoData);
-                setLoading(false);
-            } catch (err) {
-                console.error('Error fetching photos:', err);
-                setError('Failed to load photos. Please try again later.');
-                setLoading(false);
-            }
-        };
+    // Fetch photos function with improved error handling
+    const fetchPhotos = useCallback(async () => {
+        try {
+            setLoading(true);
+            setError(null);
 
-        fetchPhotoData();
+            console.log(`Fetching photos from ${BASE_URL}/photos`);
+
+            const response = await axios.get(`${BASE_URL}/photos`, {
+                timeout: 15000 // Increased timeout for slower connections
+            });
+
+            console.log('Photos response:', response.data);
+
+            if (response.data && Array.isArray(response.data)) {
+                // Process photos to ensure they have full URLs
+                const processedPhotos = response.data.map(photo => ({
+                    ...photo,
+                    id: photo.filename || photo.photoId,
+                    url: photo.url
+                        ? (photo.url.startsWith('http') ? photo.url : `${BASE_URL}${photo.url}`)
+                        : `${BASE_URL}/photos/${photo.filename || photo.photoId}`,
+                    thumbnailUrl: photo.thumbnailUrl
+                        ? (photo.thumbnailUrl.startsWith('http') ? photo.thumbnailUrl : `${BASE_URL}${photo.thumbnailUrl}`)
+                        : `${BASE_URL}/thumbnails/thumb_${photo.filename || photo.photoId}`
+                }));
+
+                setPhotos(processedPhotos);
+            } else {
+                // Handle unexpected response format
+                console.warn('Unexpected response format:', response.data);
+                setError('Received unexpected data format from server');
+            }
+        } catch (err) {
+            console.error('Error fetching photos:', err);
+
+            // More detailed error message based on the error type
+            if (err.response) {
+                // The request was made and the server responded with a status code
+                // that falls out of the range of 2xx
+                setError(`Server error: ${err.response.status} - ${err.response.data.message || 'Unknown error'}`);
+            } else if (err.request) {
+                // The request was made but no response was received
+                setError('No response from server. Please check your internet connection.');
+            } else {
+                // Something happened in setting up the request that triggered an Error
+                setError(`Error: ${err.message}`);
+            }
+        } finally {
+            setLoading(false);
+        }
     }, []);
+
+    // Fetch photos when component mounts or when retry is triggered
+    useEffect(() => {
+        fetchPhotos();
+    }, [fetchPhotos, retryCount]);
+
+    // Handle retry button click
+    const handleRetry = () => {
+        setRetryCount(prev => prev + 1);
+    };
 
     // Calculate pagination
     const indexOfLastPhoto = currentPage * photosPerPage;
@@ -71,18 +120,21 @@ const Gallery = () => {
         return <Loading message="Loading wedding photos..." />;
     }
 
-    // If error, show error message
+    // If error, show error message with retry button
     if (error) {
         return (
             <div className="container mx-auto py-16 px-4 text-center">
-                <Icon path={mdiHeartOutline} size={3} className="text-wedding-love/50 mx-auto mb-4" />
-                <h2 className="text-2xl font-bold mb-4">Oops! Something went wrong</h2>
+                <div className="text-6xl text-red-500/50 mb-6">
+                    <Icon path={mdiAlert} size={4} className="mx-auto" />
+                </div>
+                <h2 className="text-2xl font-bold mb-4">Something went wrong</h2>
                 <p className="text-gray-600 mb-8">{error}</p>
                 <button
-                    onClick={() => window.location.reload()}
-                    className="btn btn-primary btn-christian"
+                    onClick={handleRetry}
+                    className="btn btn-primary btn-christian flex items-center mx-auto"
                 >
-                    Try Again
+                    <Icon path={mdiRefresh} size={1} className="mr-2" />
+                    Retry
                 </button>
             </div>
         );
@@ -94,7 +146,14 @@ const Gallery = () => {
             <div className="container mx-auto py-16 px-4 text-center">
                 <Icon path={mdiImageMultiple} size={3} className="text-christian-accent/40 mx-auto mb-4" />
                 <h2 className="text-2xl font-bold mb-4">No Photos Yet</h2>
-                <p className="text-gray-600">Check back soon for wedding memories!</p>
+                <p className="text-gray-600 mb-6">Photos will appear here once they've been uploaded.</p>
+                <button
+                    onClick={handleRetry}
+                    className="btn btn-outline btn-christian-outline flex items-center mx-auto"
+                >
+                    <Icon path={mdiRefresh} size={1} className="mr-2" />
+                    Check Again
+                </button>
             </div>
         );
     }
@@ -129,6 +188,20 @@ const Gallery = () => {
                 >
                     Browse photos from Rushel & Sivani's special day
                 </motion.p>
+            </div>
+
+            {/* Photo count */}
+            <div className="mb-4 text-center">
+                <p className="text-sm text-gray-500">
+                    Showing {photos.length} {photos.length === 1 ? 'photo' : 'photos'}
+                </p>
+                <button
+                    onClick={handleRetry}
+                    className="text-sm text-christian-accent hover:underline flex items-center justify-center mx-auto mt-1"
+                >
+                    <Icon path={mdiRefresh} size={0.6} className="mr-1" />
+                    Refresh
+                </button>
             </div>
 
             {/* Photo grid */}

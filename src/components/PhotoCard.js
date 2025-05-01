@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import Icon from '@mdi/react';
+import { mdiImage, mdiClock, mdiReload } from '@mdi/js';
 
 const PhotoCard = ({ photo }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(false);
+    const [retryCount, setRetryCount] = useState(0);
 
     // Format date for display
     const formatDate = (timestamp) => {
@@ -31,6 +34,16 @@ const PhotoCard = ({ photo }) => {
     // Handle image load success
     const handleLoad = () => {
         setIsLoading(false);
+        setError(false);
+    };
+
+    // Handle retry loading the image
+    const handleRetry = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsLoading(true);
+        setError(false);
+        setRetryCount(prev => prev + 1);
     };
 
     return (
@@ -52,17 +65,22 @@ const PhotoCard = ({ photo }) => {
                     {error && (
                         <div className="absolute inset-0 bg-gray-100 flex items-center justify-center p-4 text-center text-gray-500">
                             <div>
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                </svg>
-                                <p className="text-sm">Image not available</p>
+                                <Icon path={mdiImage} size={3} className="mx-auto mb-2" />
+                                <p className="text-sm mb-2">Image not available</p>
+                                <button
+                                    onClick={handleRetry}
+                                    className="text-xs px-3 py-1 bg-wedding-love/80 text-white rounded-full hover:bg-wedding-love flex items-center mx-auto"
+                                >
+                                    <Icon path={mdiReload} size={0.6} className="mr-1" />
+                                    Retry
+                                </button>
                             </div>
                         </div>
                     )}
 
                     {/* Actual image - use thumbnail if available, otherwise full image */}
                     <img
-                        src={photo.thumbnailUrl || photo.url}
+                        src={`${photo.thumbnailUrl || photo.url}${retryCount > 0 ? `?t=${Date.now()}` : ''}`}
                         alt={`Wedding photo ${photo.id || photo.filename}`}
                         className={`w-full h-full object-cover transition-transform duration-300 hover:scale-110 ${isLoading ? 'opacity-0' : 'opacity-100'}`}
                         onLoad={handleLoad}
@@ -73,7 +91,10 @@ const PhotoCard = ({ photo }) => {
 
                 <div className="p-3">
                     <div className="flex justify-between items-center">
-                        <div className="text-xs text-gray-500">{formatDate(photo.timestamp)}</div>
+                        <div className="flex items-center text-xs text-gray-500">
+                            <Icon path={mdiClock} size={0.6} className="mr-1" />
+                            {formatDate(photo.timestamp)}
+                        </div>
                         <motion.div
                             whileHover={{ scale: 1.2 }}
                             className="text-wedding-love"

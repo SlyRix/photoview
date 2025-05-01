@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Icon from '@mdi/react';
-import { getPhoto } from '../utils/api';
 import Loading from './Loading';
 import {
     mdiArrowLeft,
@@ -15,8 +14,15 @@ import {
     mdiWhatsapp,
     mdiTwitter,
     mdiFacebook,
-    mdiEmailOutline
+    mdiEmailOutline,
+    mdiRefresh
 } from '@mdi/js';
+
+// Improved API import
+import axios from 'axios';
+
+// Base URL for the server - make sure this is correct
+const BASE_URL = 'https://photo-view.slyrix.com';
 
 const PhotoDetail = () => {
     const { photoId } = useParams();
@@ -24,6 +30,7 @@ const PhotoDetail = () => {
     const [photo, setPhoto] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [retryCount, setRetryCount] = useState(0);
     const [imageLoaded, setImageLoaded] = useState(false);
     const [shareOpen, setShareOpen] = useState(false);
     const [downloadSuccess, setDownloadSuccess] = useState(false);
@@ -31,24 +38,70 @@ const PhotoDetail = () => {
     const [scale, setScale] = useState(1);
     const [lastTap, setLastTap] = useState(0);
 
-    // Fetch the photo data when component mounts or photoId changes
-    useEffect(() => {
-        const fetchPhotoData = async () => {
-            try {
-                setLoading(true);
-                setImageLoaded(false);
-                const photoData = await getPhoto(photoId);
+    // Function to fetch photo details
+    const fetchPhoto = useCallback(async () => {
+        if (!photoId) return;
+
+        setLoading(true);
+        setError(null);
+
+        try {
+            console.log(`Fetching photo: ${photoId}`);
+
+            // First try the API endpoint
+            const response = await axios.get(`${BASE_URL}/photos/${photoId}`);
+
+            if (response.data) {
+                console.log('Photo data received:', response.data);
+                const photoData = {
+                    ...response.data,
+                    id: photoId,
+                    url: `${BASE_URL}/photos/${photoId}`,
+                    thumbnailUrl: response.data.thumbnailUrl
+                        ? `${BASE_URL}${response.data.thumbnailUrl}`
+                        : `${BASE_URL}/thumbnails/thumb_${photoId}`
+                };
+
                 setPhoto(photoData);
                 setLoading(false);
-            } catch (err) {
-                console.error('Error fetching photo:', err);
-                setError('Failed to load photo. Please try again later.');
+                return;
+            }
+        } catch (apiError) {
+            console.error('API error:', apiError);
+
+            // If API fails, try to access the image directly
+            try {
+                // Test if the image exists by creating a dummy image element
+                const testImg = new Image();
+                testImg.onload = () => {
+                    // Image exists, construct basic photo object
+                    setPhoto({
+                        id: photoId,
+                        filename: photoId,
+                        url: `${BASE_URL}/photos/${photoId}`,
+                        thumbnailUrl: `${BASE_URL}/thumbnails/thumb_${photoId}`,
+                        timestamp: new Date().toISOString()
+                    });
+                    setLoading(false);
+                };
+
+                testImg.onerror = () => {
+                    throw new Error('Image not found');
+                };
+
+                testImg.src = `${BASE_URL}/photos/${photoId}`;
+            } catch (directError) {
+                console.error('Direct access error:', directError);
+                setError('Photo not found. It may not have been uploaded yet.');
                 setLoading(false);
             }
-        };
-
-        fetchPhotoData();
+        }
     }, [photoId]);
+
+    // Fetch the photo data when component mounts or photoId changes
+    useEffect(() => {
+        fetchPhoto();
+    }, [fetchPhoto, photoId, retryCount]);
 
     // Format date for display
     const formatDate = (timestamp) => {
@@ -66,6 +119,11 @@ const PhotoDetail = () => {
         } catch (e) {
             return 'Unknown date';
         }
+    };
+
+    // Handle manual retry
+    const handleRetry = () => {
+        setRetryCount(prev => prev + 1);
     };
 
     // Handle going back to gallery
@@ -141,7 +199,7 @@ const PhotoDetail = () => {
         return <Loading message="Loading photo..." />;
     }
 
-    // If error, show error message
+    // If error, show error message with retry button
     if (error || !photo) {
         return (
             <div className="container mx-auto py-16 px-4 text-center">
@@ -150,12 +208,21 @@ const PhotoDetail = () => {
                 </div>
                 <h2 className="text-2xl font-bold mb-4">Photo Not Found</h2>
                 <p className="text-gray-600 mb-8">{error || "We couldn't find the requested photo."}</p>
-                <button
-                    onClick={handleBack}
-                    className="btn btn-primary btn-christian"
-                >
-                    Back to Gallery
-                </button>
+                <div className="flex flex-col md:flex-row items-center justify-center gap-4">
+                    <button
+                        onClick={handleRetry}
+                        className="btn btn-primary btn-christian flex items-center"
+                    >
+                        <Icon path={mdiRefresh} size={1} className="mr-2" />
+                        Retry Loading
+                    </button>
+                    <button
+                        onClick={handleBack}
+                        className="btn btn-outline btn-christian-outline"
+                    >
+                        Back to Gallery
+                    </button>
+                </div>
             </div>
         );
     }
@@ -206,7 +273,7 @@ const PhotoDetail = () => {
                             onLoad={() => setImageLoaded(true)}
                             onError={() => {
                                 setImageLoaded(true);
-                                setError('Failed to load image.');
+                                setError('Failed to load image. Try refreshing the page.');
                             }}
                         />
 
