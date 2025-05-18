@@ -13,6 +13,10 @@ const API_KEY = process.env.API_KEY || 'xP9dR7tK2mB5vZ3q';
 const PHOTOS_DIR = process.env.PHOTOS_DIR || '/var/www/photo-view.slyrix.com/photos';
 const THUMBNAILS_DIR = process.env.THUMBNAILS_DIR || '/var/www/photo-view.slyrix.com/thumbnails';
 const DATA_DIR = process.env.DATA_DIR || '/var/www/photo-view.slyrix.com/data';
+const FRAMES_DIR = process.env.FRAMES_DIR || '/var/www/photo-view.slyrix.com/frames';
+const PREVIEWS_DIR = process.env.PREVIEWS_DIR || '/var/www/photo-view.slyrix.com/previews';
+const DOWNLOADS_DIR = process.env.DOWNLOADS_DIR || '/var/www/photo-view.slyrix.com/downloads';
+
 
 // Create directories if they don't exist
 try {
@@ -206,8 +210,386 @@ app.get('/api/photos', async (req, res) => {
         res.status(500).json({ success: false, error: 'Failed to retrieve photos' });
     }
 });
+app.get('/api/frames', async (req, res) => {
+    try {
+        // Define standard frames
+        const standardFrames = [
+            {
+                id: 'standard',
+                name: 'Standard',
+                thumbnailUrl: '/frames/standard-thumbnail.png',
+                frameUrl: '/frames/wedding-frame-standard.png'
+            },
+            {
+                id: 'custom',
+                name: 'Elegant Gold',
+                thumbnailUrl: '/frames/custom-thumbnail.png',
+                frameUrl: '/frames/wedding-frame-custom.png'
+            },
+            {
+                id: 'insta',
+                name: 'Instagram',
+                thumbnailUrl: '/frames/insta-thumbnail.png',
+                frameUrl: '/frames/wedding-frame-insta.png'
+            },
+            {
+                id: 'none',
+                name: 'No Frame',
+                thumbnailUrl: null,
+                frameUrl: null
+            }
+        ];
 
-// Upload endpoint with improved error handling
+        // Check if there are custom frames in the FRAMES_DIR
+        try {
+            // Get all .png files in the frames directory
+            const files = await fs.readdir(FRAMES_DIR);
+            const frameFiles = files.filter(file => file.endsWith('.png') && !file.includes('thumbnail'));
+
+            // Add any custom frames found (beyond the standard ones)
+            const customFrames = frameFiles
+                .filter(file => !['wedding-frame-standard.png', 'wedding-frame-custom.png', 'wedding-frame-insta.png'].includes(file))
+                .map(file => {
+                    const frameId = file.replace('.png', '').replace('wedding-frame-', '');
+                    const thumbnailFile = `${frameId}-thumbnail.png`;
+
+                    return {
+                        id: frameId,
+                        name: frameId.charAt(0).toUpperCase() + frameId.slice(1).replace(/-/g, ' '),
+                        thumbnailUrl: files.includes(thumbnailFile) ? `/frames/${thumbnailFile}` : null,
+                        frameUrl: `/frames/${file}`
+                    };
+                });
+
+            // Combine standard and custom frames
+            const allFrames = [...standardFrames, ...customFrames];
+
+            res.json(allFrames);
+        } catch (err) {
+            console.warn('Error reading frames directory:', err.message);
+            res.json(standardFrames);
+        }
+    } catch (err) {
+        console.error('Error fetching frames:', err);
+        res.status(500).json({ success: false, error: 'Failed to retrieve frames' });
+    }
+});
+
+// Preview a photo with a frame applied
+app.post('/api/preview-frame', async (req, res) => {
+    try {
+        const { photoUrl, frameUrl, quality } = req.body;
+
+        if (!photoUrl) {
+            return res.status(400).json({
+                success: false,
+                error: 'No photo URL provided'
+            });
+        }
+
+        // If no frame selected, return the original photo
+        if (!frameUrl) {
+            return res.json({
+                success: true,
+                previewUrl: photoUrl
+            });
+        }
+
+        // Extract photo filename from URL
+        let photoFilename;
+        try {
+            const urlPath = new URL(photoUrl).pathname;
+            photoFilename = path.basename(urlPath);
+        } catch (e) {
+            // If URL parsing fails, try direct path extraction
+            photoFilename = path.basename(photoUrl.split('/').pop());
+        }
+
+        // Extract frame filename from URL
+        let frameFilename;
+        try {
+            const urlPath = new URL(frameUrl).pathname;
+            frameFilename = path.basename(urlPath);
+        } catch (e) {
+            // If URL parsing fails, try direct path extraction
+            frameFilename = path.basename(frameUrl.split('/').pop());
+        }
+
+        // Generate a unique preview filename
+        const previewFilename = `preview_${frameFilename}_${photoFilename}`;
+        const previewPath = path.join(PREVIEWS_DIR, previewFilename);
+        const previewUrl = `/previews/${previewFilename}`;
+
+        // Check if preview already exists and is recent (< 1 hour old)
+        let useExistingPreview = false;
+        try {
+            const previewStat = await fs.stat(previewPath);
+            const previewAge = Date.now() - previewStat.mtimeMs;
+            useExistingPreview = previewAge < 60 * 60 * 1000; // 1 hour in milliseconds
+        } catch (err) {
+            // Preview doesn't exist, will create it
+        }
+
+        // If preview doesn't exist or is old, generate it
+        if (!useExistingPreview) {
+            // Get paths to original files
+            const originalPhotoPath = path.join(PHOTOS_DIR, photoFilename);
+            const frameImagePath = path.join(FRAMES_DIR, frameFilename);
+
+            // Check if files exist
+            if (!await fs.pathExists(originalPhotoPath)) {
+                return res.status(404).json({
+                    success: false,
+                    error: 'Original photo not found'
+                });
+            }
+
+            if (!await fs.pathExists(frameImagePath)) {
+                return res.status(404).json({
+                    success: false,
+                    error: 'Frame not found'
+                });
+            }
+
+            // Generate the preview
+            try {
+                // Read the original files
+                const originalBuffer = await fs.readFile(originalPhotoPath);
+                const frameBuffer = await fs.readFile(frameImagePath);
+
+                // Get frame dimensions
+                const frameMeta = await sharp(frameBuffer).metadata();
+                const targetWidth = frameMeta.width;
+                const targetHeight = frameMeta.height;
+
+                // Calculate the scale factor based on quality (low/med/high)
+                let scaleFactor = 0.85; // Default is 85%
+                let outputQuality = 60; // Default is lower for previews
+
+                if (quality === 'low') {
+                    scaleFactor = 0.80;
+                    outputQuality = 40;
+                } else if (quality === 'high') {
+                    scaleFactor = 0.90;
+                    outputQuality = 75;
+                }
+
+                // Resize the original photo
+                const resizedPhoto = await sharp(originalBuffer)
+                    .resize({
+                        width: Math.round(targetWidth * scaleFactor),
+                        height: Math.round(targetHeight * scaleFactor),
+                        fit: 'contain',
+                        background: { r: 255, g: 255, b: 255, alpha: 0 }
+                    })
+                    .toBuffer();
+
+                // Create canvas with white background
+                const canvas = await sharp({
+                    create: {
+                        width: targetWidth,
+                        height: targetHeight,
+                        channels: 4,
+                        background: { r: 255, g: 255, b: 255, alpha: 1 }
+                    }
+                }).png().toBuffer();
+
+                // Apply the photo to the canvas
+                const canvasWithPhoto = await sharp(canvas)
+                    .composite([{
+                        input: resizedPhoto,
+                        left: Math.floor((targetWidth - Math.round(targetWidth * scaleFactor)) / 2),
+                        top: Math.floor((targetHeight - Math.round(targetHeight * scaleFactor)) / 2)
+                    }])
+                    .toBuffer();
+
+                // Apply the frame overlay
+                const finalImage = await sharp(canvasWithPhoto)
+                    .composite([{ input: frameBuffer, left: 0, top: 0 }])
+                    .jpeg({ quality: outputQuality })
+                    .toBuffer();
+
+                // Save the preview
+                await fs.writeFile(previewPath, finalImage);
+
+            } catch (err) {
+                console.error('Error generating preview:', err);
+                return res.status(500).json({
+                    success: false,
+                    error: 'Error generating preview',
+                    message: err.message
+                });
+            }
+        }
+
+        // Return the preview URL
+        // Use the hostname from the request to construct the full URL
+        const host = req.headers.host;
+        const protocol = req.secure ? 'https' : 'http';
+        const fullPreviewUrl = `${protocol}://${host}${previewUrl}`;
+
+        res.json({
+            success: true,
+            previewUrl: fullPreviewUrl
+        });
+    } catch (err) {
+        console.error('Error in preview-frame endpoint:', err);
+        res.status(500).json({
+            success: false,
+            error: 'Server error',
+            message: err.message
+        });
+    }
+});
+
+// Download a photo with a frame applied
+app.post('/api/download-framed-photo', async (req, res) => {
+    try {
+        const { photoUrl, frameUrl } = req.body;
+
+        if (!photoUrl) {
+            return res.status(400).json({
+                success: false,
+                error: 'No photo URL provided'
+            });
+        }
+
+        // If no frame selected, redirect to the original photo
+        if (!frameUrl) {
+            // Extract the photo filename from URL
+            let photoFilename;
+            try {
+                const urlPath = new URL(photoUrl).pathname;
+                photoFilename = path.basename(urlPath);
+            } catch (e) {
+                // If URL parsing fails, try direct path extraction
+                photoFilename = path.basename(photoUrl.split('/').pop());
+            }
+
+            res.redirect(`/photos/${photoFilename}`);
+            return;
+        }
+
+        // Extract photo filename from URL
+        let photoFilename;
+        try {
+            const urlPath = new URL(photoUrl).pathname;
+            photoFilename = path.basename(urlPath);
+        } catch (e) {
+            // If URL parsing fails, try direct path extraction
+            photoFilename = path.basename(photoUrl.split('/').pop());
+        }
+
+        // Extract frame filename from URL
+        let frameFilename;
+        try {
+            const urlPath = new URL(frameUrl).pathname;
+            frameFilename = path.basename(urlPath);
+        } catch (e) {
+            // If URL parsing fails, try direct path extraction
+            frameFilename = path.basename(frameUrl.split('/').pop());
+        }
+
+        // Generate a unique download filename
+        const downloadFilename = `framed_${frameFilename}_${photoFilename}`;
+        const downloadPath = path.join(DOWNLOADS_DIR, downloadFilename);
+
+        // Get paths to original files
+        const originalPhotoPath = path.join(PHOTOS_DIR, photoFilename);
+        const frameImagePath = path.join(FRAMES_DIR, frameFilename);
+
+        // Check if files exist
+        if (!await fs.pathExists(originalPhotoPath)) {
+            return res.status(404).json({
+                success: false,
+                error: 'Original photo not found'
+            });
+        }
+
+        if (!await fs.pathExists(frameImagePath)) {
+            return res.status(404).json({
+                success: false,
+                error: 'Frame not found'
+            });
+        }
+
+        // Generate the framed photo with highest quality
+        try {
+            // Read the original files
+            const originalBuffer = await fs.readFile(originalPhotoPath);
+            const frameBuffer = await fs.readFile(frameImagePath);
+
+            // Get frame dimensions
+            const frameMeta = await sharp(frameBuffer).metadata();
+            const targetWidth = frameMeta.width;
+            const targetHeight = frameMeta.height;
+
+            // Resize the original photo - high quality for download
+            const resizedPhoto = await sharp(originalBuffer)
+                .resize({
+                    width: Math.round(targetWidth * 0.92), // Higher fill ratio for downloads
+                    height: Math.round(targetHeight * 0.92),
+                    fit: 'contain',
+                    background: { r: 255, g: 255, b: 255, alpha: 0 }
+                })
+                .toBuffer();
+
+            // Create canvas with white background
+            const canvas = await sharp({
+                create: {
+                    width: targetWidth,
+                    height: targetHeight,
+                    channels: 4,
+                    background: { r: 255, g: 255, b: 255, alpha: 1 }
+                }
+            }).png().toBuffer();
+
+            // Apply the photo to the canvas
+            const canvasWithPhoto = await sharp(canvas)
+                .composite([{
+                    input: resizedPhoto,
+                    left: Math.floor((targetWidth - Math.round(targetWidth * 0.92)) / 2),
+                    top: Math.floor((targetHeight - Math.round(targetHeight * 0.92)) / 2)
+                }])
+                .toBuffer();
+
+            // Apply the frame overlay
+            const finalImage = await sharp(canvasWithPhoto)
+                .composite([{ input: frameBuffer, left: 0, top: 0 }])
+                .jpeg({ quality: 95 }) // Highest quality for downloads
+                .toBuffer();
+
+            // Save the framed photo
+            await fs.writeFile(downloadPath, finalImage);
+
+            // Send the file as attachment
+            res.setHeader('Content-Disposition', `attachment; filename="rushel-sivani-wedding-photo.jpg"`);
+            res.setHeader('Content-Type', 'image/jpeg');
+            res.setHeader('Cache-Control', 'no-cache');
+            res.send(finalImage);
+
+        } catch (err) {
+            console.error('Error generating framed photo for download:', err);
+            res.status(500).json({
+                success: false,
+                error: 'Error generating framed photo',
+                message: err.message
+            });
+        }
+    } catch (err) {
+        console.error('Error in download-framed-photo endpoint:', err);
+        res.status(500).json({
+            success: false,
+            error: 'Server error',
+            message: err.message
+        });
+    }
+});
+
+// Add these new static file directories
+app.use('/frames', express.static(FRAMES_DIR));
+app.use('/previews', express.static(PREVIEWS_DIR));
+app.use('/downloads', express.static(DOWNLOADS_DIR));// Upload endpoint with improved error handling
 app.post('/api/upload-photo', checkApiKey, (req, res) => {
     const uploadHandler = upload.fields([
         { name: 'photo', maxCount: 1 },

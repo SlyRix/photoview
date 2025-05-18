@@ -3,6 +3,7 @@ import {useParams, useNavigate} from 'react-router-dom';
 import {motion, AnimatePresence} from 'framer-motion';
 import Icon from '@mdi/react';
 import Loading from './Loading';
+import FrameSelection from './FrameSelection';
 import {
     mdiArrowLeft,
     mdiDownload,
@@ -14,8 +15,10 @@ import {
     mdiFacebook,
     mdiEmailOutline,
     mdiRefresh,
-    mdiCamera
+    mdiCamera,
+    mdiImageFrame
 } from '@mdi/js';
+import { downloadFramedPhoto } from '../utils/frameService';
 
 // Base URL for the server
 const BASE_URL = '//photo-view.slyrix.com';
@@ -29,71 +32,77 @@ const PhotoDetail = () => {
     const [retryCount, setRetryCount] = useState(0);
     const [imageLoaded, setImageLoaded] = useState(false);
     const [shareOpen, setShareOpen] = useState(false);
+    const [frameDialogOpen, setFrameDialogOpen] = useState(false);
     const [downloadSuccess, setDownloadSuccess] = useState(false);
     const [shareSuccess, setShareSuccess] = useState(false);
     const [scale, setScale] = useState(1);
     const [lastTap, setLastTap] = useState(0);
+    const [selectedFrame, setSelectedFrame] = useState({
+        frameId: 'none',
+        frameUrl: null,
+        previewUrl: null
+    });
+    const [activePreviewUrl, setActivePreviewUrl] = useState(null);
+    const [previewError, setPreviewError] = useState(false);
 
-    // Function to fetch photo details
-    const fetchPhoto = useCallback(async () => {
-        if (!photoId) return;
+    // Fetch photo metadata when component mounts or photoId changes
+    useEffect(() => {
+        async function fetchPhoto() {
+            if (!photoId) return;
 
-        setLoading(true);
-        setError(null);
+            setLoading(true);
+            setError(null);
 
-        try {
-            console.log(`Fetching photo: ${photoId}`);
+            try {
+                console.log(`Looking for metadata for: ${photoId}`);
 
-            // First try the API endpoint
-            const response = await fetch(`${BASE_URL}/photos/${photoId}`);
+                const res = await fetch(`${BASE_URL}/api/photos`);
+                const allPhotos = await res.json();
 
-            if (response.ok) {
-                const data = await response.json();
-                console.log('Photo data received:', data);
-                const photoData = {
-                    ...data,
-                    id: photoId,
-                    url: `${BASE_URL}/photos/${photoId}`,
-                    thumbnailUrl: data.thumbnailUrl
-                        ? `${BASE_URL}${data.thumbnailUrl}`
-                        : `${BASE_URL}/thumbnails/thumb_${photoId}`
-                };
+                const found = allPhotos.find(p => p.photoId === photoId || p.filename === photoId);
 
-                setPhoto(photoData);
-                setLoading(false);
-                return;
-            } else {
-                // If API fails, try to access the image directly
+                if (found) {
+                    const photoData = {
+                        ...found,
+                        id: photoId,
+                        url: `${BASE_URL}${found.url}`,
+                        thumbnailUrl: `${BASE_URL}${found.thumbnailUrl}`
+                    };
+                    setPhoto(photoData);
+                    setActivePreviewUrl(photoData.url);
+                    setLoading(false);
+                } else {
+                    throw new Error('Photo metadata not found');
+                }
+            } catch (err) {
+                console.warn('API failed, falling back to image test:', err.message);
+
                 const testImg = new Image();
                 testImg.onload = () => {
-                    // Image exists, construct basic photo object
-                    setPhoto({
+                    const photoData = {
                         id: photoId,
                         filename: photoId,
                         url: `${BASE_URL}/photos/${photoId}`,
                         thumbnailUrl: `${BASE_URL}/thumbnails/thumb_${photoId}`,
                         timestamp: new Date().toISOString()
-                    });
+                    };
+                    setPhoto(photoData);
+                    setActivePreviewUrl(photoData.url);
                     setLoading(false);
                 };
 
                 testImg.onerror = () => {
-                    throw new Error('Image not found');
+                    console.error('Image load failed');
+                    setError('Photo not found. It may not have been uploaded yet.');
+                    setLoading(false);
                 };
 
                 testImg.src = `${BASE_URL}/photos/${photoId}`;
             }
-        } catch (error) {
-            console.error('Error fetching photo:', error);
-            setError('Photo not found. It may not have been uploaded yet.');
-            setLoading(false);
         }
-    }, [photoId]);
 
-    // Fetch the photo data when component mounts or photoId changes
-    useEffect(() => {
         fetchPhoto();
-    }, [fetchPhoto, photoId, retryCount]);
+    }, [photoId, retryCount]);
 
     // Format date for display
     const formatDate = (timestamp) => {
@@ -116,6 +125,27 @@ const PhotoDetail = () => {
     // Handle manual retry
     const handleRetry = () => {
         setRetryCount(prev => prev + 1);
+        setPreviewError(false);
+
+        // If we have a frame selected but preview failed, try falling back to original photo
+        if (previewError && photo) {
+            setActivePreviewUrl(photo.url);
+            setImageLoaded(false);
+        }
+    };
+
+    // Reset to original photo
+    const resetToOriginalPhoto = () => {
+        if (photo) {
+            setActivePreviewUrl(photo.url);
+            setPreviewError(false);
+            setImageLoaded(false);
+            setSelectedFrame({
+                frameId: 'none',
+                frameUrl: null,
+                previewUrl: null
+            });
+        }
     };
 
     // Handle going back to gallery
@@ -123,18 +153,62 @@ const PhotoDetail = () => {
         navigate('/');
     };
 
+    // Handle opening frame selection dialog
+    const handleOpenFrameSelection = () => {
+        setFrameDialogOpen(true);
+    };
+
+    // Handle frame selection
+    const handleSelectFrame = (frameData) => {
+        setSelectedFrame(frameData);
+
+        // Only update the preview URL if we actually have one
+        if (frameData.previewUrl) {
+            setImageLoaded(false);
+            setPreviewError(false);
+
+            // Pre-load the image to test if it works
+            const img = new Image();
+            img.onload = () => {
+                setActivePreviewUrl(frameData.previewUrl);
+            };
+            img.onerror = () => {
+                console.error('Preview image failed to load:', frameData.previewUrl);
+                // Fall back to original photo if preview fails
+                setActivePreviewUrl(photo.url);
+                setPreviewError(true);
+            };
+            img.src = frameData.previewUrl;
+        }
+    };
+
+    // Handle frame preview ready
+    const handlePreviewReady = (previewUrl) => {
+        if (previewUrl) {
+            // Pre-load the image to test if it works
+            const img = new Image();
+            img.onload = () => {
+                setActivePreviewUrl(previewUrl);
+                setPreviewError(false);
+            };
+            img.onerror = () => {
+                console.error('Preview image failed to load:', previewUrl);
+                setPreviewError(true);
+            };
+            img.src = previewUrl;
+        }
+    };
+
     // Handle image download
     const handleDownload = async () => {
         if (!photo) return;
 
         try {
-            // Create a temporary link element
-            const link = document.createElement('a');
-            link.href = photo.url;
-            link.download = photo.id || 'wedding-photo.jpg';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            await downloadFramedPhoto(
+                photo.url,
+                selectedFrame.frameUrl,
+                `rushel-sivani-wedding-${photoId}.jpg`
+            );
 
             // Show success indicator
             setDownloadSuccess(true);
@@ -261,17 +335,41 @@ const PhotoDetail = () => {
                             </div>
                         )}
 
+                        {/* Frame preview error message */}
+                        {previewError && (
+                            <div className="absolute top-4 left-0 right-0 flex justify-center">
+                                <div className="bg-red-100 border border-red-200 text-red-700 px-4 py-2 rounded-lg shadow-md text-sm">
+                                    Frame preview failed to load.
+                                    <button
+                                        onClick={resetToOriginalPhoto}
+                                        className="ml-2 underline hover:text-red-800"
+                                    >
+                                        View original photo
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Photo with zoom effect */}
                         <motion.img
-                            src={photo.url}
+                            src={activePreviewUrl || photo.url}
                             alt="Wedding photo"
                             className="max-w-full max-h-[70vh] object-contain"
                             animate={{scale}}
                             transition={{type: 'spring', stiffness: 300, damping: 30}}
                             onLoad={() => setImageLoaded(true)}
-                            onError={() => {
+                            onError={(e) => {
+                                console.error('Image failed to load:', e.target.src);
                                 setImageLoaded(true);
-                                setError('Failed to load image. Try refreshing the page.');
+
+                                // If it's a preview that failed, attempt to show original photo
+                                if (e.target.src !== photo.url) {
+                                    console.log('Falling back to original photo');
+                                    setActivePreviewUrl(photo.url);
+                                    setPreviewError(true);
+                                } else {
+                                    setError('Failed to load image. Try refreshing the page.');
+                                }
                             }}
                         />
 
@@ -298,10 +396,33 @@ const PhotoDetail = () => {
                                 <p className="text-sm text-gray-500">
                                     {formatDate(photo.timestamp)}
                                 </p>
+
+                                {/* Selected frame indicator - with ESLint fix */}
+                                {selectedFrame.frameId !== 'none' && (
+                                    <p className="text-xs text-wedding-love mt-1">
+                                        {previewError ?
+                                            "Frame preview unavailable" :
+                                            `${selectedFrame.frameId === 'standard' ? 'Standard' :
+                                                selectedFrame.frameId === 'custom' ? 'Elegant Gold' :
+                                                    selectedFrame.frameId === 'insta' ? 'Instagram' : 'Custom'} frame applied`
+                                        }
+                                    </p>
+                                )}
                             </div>
 
                             {/* Action buttons */}
                             <div className="flex flex-wrap gap-3">
+                                {/* Frame Selection Button */}
+                                <motion.button
+                                    whileHover={{scale: 1.05}}
+                                    whileTap={{scale: 0.95}}
+                                    onClick={handleOpenFrameSelection}
+                                    className="btn btn-outline flex items-center text-sm px-4 py-2 rounded-full border border-hindu-accent text-hindu-accent hover:bg-hindu-accent hover:text-white"
+                                >
+                                    <Icon path={mdiImageFrame} size={0.8} className="mr-2"/>
+                                    <span>{selectedFrame.frameId !== 'none' ? 'Change Frame' : 'Add Frame'}</span>
+                                </motion.button>
+
                                 {/* Take More Photos button */}
                                 <motion.button
                                     whileHover={{scale: 1.05}}
@@ -388,6 +509,19 @@ const PhotoDetail = () => {
                     </div>
                 </motion.div>
 
+                {/* Frame Selection Dialog */}
+                <AnimatePresence>
+                    {frameDialogOpen && (
+                        <FrameSelection
+                            photoUrl={photo.url}
+                            onSelectFrame={handleSelectFrame}
+                            onPreviewReady={handlePreviewReady}
+                            isOpen={frameDialogOpen}
+                            onClose={() => setFrameDialogOpen(false)}
+                        />
+                    )}
+                </AnimatePresence>
+
                 {/* Share modal */}
                 <AnimatePresence>
                     {shareOpen && (
@@ -417,16 +551,16 @@ const PhotoDetail = () => {
 
                                 <div className="flex justify-around mb-6">
                                     {/* WhatsApp */}
-
-                                    href={`https://wa.me/?text=${encodeURIComponent('Check out this photo from Rushel & Sivani\'s wedding! ' + window.location.href)}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex flex-col items-center text-gray-700 hover:text-green-600"
-                                    onClick={() => {
-                                    setShareSuccess(true);
-                                    setShareOpen(false);
-                                }}
-                                    <a>
+                                    <a
+                                        href={`https://wa.me/?text=${encodeURIComponent('Check out this photo from Rushel & Sivani\'s wedding! ' + window.location.href)}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex flex-col items-center text-gray-700 hover:text-green-600"
+                                        onClick={() => {
+                                            setShareSuccess(true);
+                                            setShareOpen(false);
+                                        }}
+                                    >
                                         <div
                                             className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center mb-2">
                                             <Icon path={mdiWhatsapp} size={1.2}/>
@@ -435,16 +569,16 @@ const PhotoDetail = () => {
                                     </a>
 
                                     {/* Facebook */}
-
-                                    href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex flex-col items-center text-gray-700 hover:text-blue-600"
-                                    onClick={() => {
-                                    setShareSuccess(true);
-                                    setShareOpen(false);
-                                }}
-                                    <a>
+                                    <a
+                                        href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex flex-col items-center text-gray-700 hover:text-blue-600"
+                                        onClick={() => {
+                                            setShareSuccess(true);
+                                            setShareOpen(false);
+                                        }}
+                                    >
                                         <div
                                             className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center mb-2">
                                             <Icon path={mdiFacebook} size={1.2}/>
@@ -453,16 +587,16 @@ const PhotoDetail = () => {
                                     </a>
 
                                     {/* Twitter/X */}
-
-                                    href={`https://twitter.com/intent/tweet?text=${encodeURIComponent('Check out this photo from Rushel & Sivani\'s wedding! ' + window.location.href)}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex flex-col items-center text-gray-700 hover:text-sky-600"
-                                    onClick={() => {
-                                    setShareSuccess(true);
-                                    setShareOpen(false);
-                                }}
-                                    <a>
+                                    <a
+                                        href={`https://twitter.com/intent/tweet?text=${encodeURIComponent('Check out this photo from Rushel & Sivani\'s wedding! ' + window.location.href)}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex flex-col items-center text-gray-700 hover:text-sky-600"
+                                        onClick={() => {
+                                            setShareSuccess(true);
+                                            setShareOpen(false);
+                                        }}
+                                    >
                                         <div
                                             className="h-12 w-12 rounded-full bg-sky-100 flex items-center justify-center mb-2">
                                             <Icon path={mdiTwitter} size={1.2}/>
@@ -471,14 +605,14 @@ const PhotoDetail = () => {
                                     </a>
 
                                     {/* Email */}
-
-                                    href={`mailto:?subject=Wedding Photo&body=${encodeURIComponent('Check out this photo from Rushel & Sivani\'s wedding!\n\n' + window.location.href)}`}
-                                    className="flex flex-col items-center text-gray-700 hover:text-gray-900"
-                                    onClick={() => {
-                                    setShareSuccess(true);
-                                    setShareOpen(false);
-                                }}
-                                    <a>
+                                    <a
+                                        href={`mailto:?subject=Wedding Photo&body=${encodeURIComponent('Check out this photo from Rushel & Sivani\'s wedding!\n\n' + window.location.href)}`}
+                                        className="flex flex-col items-center text-gray-700 hover:text-gray-900"
+                                        onClick={() => {
+                                            setShareSuccess(true);
+                                            setShareOpen(false);
+                                        }}
+                                    >
                                         <div
                                             className="h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center mb-2">
                                             <Icon path={mdiEmailOutline} size={1.2}/>
