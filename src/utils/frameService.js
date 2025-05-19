@@ -103,7 +103,8 @@ export const applyFrameToPhoto = async (photoUrl, frameUrl, options = {}) => {
 
         const {
             quality = 90,
-            scaleFactor = 0.85,
+            // ENHANCED: Increased scale factor from 0.85 to 0.95 to fill more of the frame
+            scaleFactor = 0.95,
             background = { r: 255, g: 255, b: 255 }
         } = options;
 
@@ -161,7 +162,7 @@ export const generateFramePreview = async (photoUrl, frameUrl) => {
         // For previews, use lower quality for faster generation
         return await applyFrameToPhoto(photoUrl, frameUrl, {
             quality: 75,
-            scaleFactor: 0.85
+            scaleFactor: 0.95 // ENHANCED: Increased from 0.85 to make photo fill more of the frame
         });
     } catch (error) {
         console.error('Error generating frame preview:', error);
@@ -189,7 +190,7 @@ export const downloadFramedPhoto = async (photoUrl, frameUrl, filename = 'weddin
             // Generate high-quality framed photo
             downloadUrl = await applyFrameToPhoto(photoUrl, frameUrl, {
                 quality: 95,  // High quality for downloads
-                scaleFactor: 0.92 // Fill more of the frame
+                scaleFactor: 0.97 // ENHANCED: Increased from 0.92 to nearly fill the entire frame
             });
         }
 

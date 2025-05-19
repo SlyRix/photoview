@@ -11,7 +11,7 @@ import { mdiLoading, mdiAlert } from '@mdi/js';
  * @param {function} onProcessed - Callback function that receives the processed image URL
  * @param {function} onError - Callback function that receives any errors
  * @param {object} options - Additional processing options
- * @param {number} options.scaleFactor - Scale factor for the photo (0-1), default 0.85
+ * @param {number} options.scaleFactor - Scale factor for the photo (0-1), default 0.95
  * @param {number} options.quality - JPEG quality (0-1), default 0.9
  * @param {boolean} options.useOriginalIfNoFrame - Whether to use original photo when no frame, default true
  */
@@ -25,9 +25,9 @@ const ClientSideFrameProcessor = ({
     const [status, setStatus] = useState('idle'); // idle, loading, success, error
     const [errorMessage, setErrorMessage] = useState('');
 
-    // Default options
+    // Default options - ENHANCED: increased scaleFactor from 0.85 to 0.95 to fill more of the frame
     const defaultOptions = {
-        scaleFactor: 0.85,
+        scaleFactor: 0.95, // Increased from 0.85 to make photo fill more of the frame
         quality: 0.9,
         useOriginalIfNoFrame: true
     };
