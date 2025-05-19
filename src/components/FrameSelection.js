@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Icon from '@mdi/react';
 import { mdiCheckCircle, mdiImageFrame, mdiLoading, mdiImageOff } from '@mdi/js';
 import { getFrameOptions, generateFramePreview } from '../utils/frameService';
+import ClientSideFrameProcessor from './ClientSideFrameProcessor';
 
 const FrameSelection = ({
                             photoUrl,
@@ -16,6 +17,7 @@ const FrameSelection = ({
     const [previewUrls, setPreviewUrls] = useState({});
     const [loading, setLoading] = useState({});
     const [error, setError] = useState(null);
+    const [processingFrames, setProcessingFrames] = useState([]);
 
     // Fetch available frames when component mounts
     useEffect(() => {
@@ -37,48 +39,6 @@ const FrameSelection = ({
         fetchFrames();
     }, [selectedFrame]);
 
-    // Generate frame previews when frames are loaded or photoUrl changes
-    useEffect(() => {
-        if (!photoUrl || !frames.length) return;
-
-        // Generate previews for each frame
-        async function generatePreviews() {
-            for (const frame of frames) {
-                if (frame.id === 'none') {
-                    // For "No Frame" option, just use the original photo
-                    setPreviewUrls(prev => ({
-                        ...prev,
-                        [frame.id]: photoUrl
-                    }));
-                    continue;
-                }
-
-                setLoading(prev => ({ ...prev, [frame.id]: true }));
-
-                try {
-                    // Generate preview using the API
-                    const previewUrl = await generateFramePreview(photoUrl, frame.frameUrl);
-
-                    setPreviewUrls(prev => ({
-                        ...prev,
-                        [frame.id]: previewUrl
-                    }));
-
-                    // Notify parent that preview is ready if this is the selected frame
-                    if (frame.id === selectedFrame) {
-                        onPreviewReady(previewUrl);
-                    }
-                } catch (err) {
-                    console.error(`Error generating preview for frame ${frame.id}:`, err);
-                } finally {
-                    setLoading(prev => ({ ...prev, [frame.id]: false }));
-                }
-            }
-        }
-
-        generatePreviews();
-    }, [photoUrl, frames, selectedFrame, onPreviewReady]);
-
     // Handle frame selection
     const handleSelectFrame = (frameId) => {
         setSelectedFrame(frameId);
@@ -86,13 +46,79 @@ const FrameSelection = ({
         // Find the selected frame
         const frame = frames.find(f => f.id === frameId);
 
-        // Notify parent component about frame selection
-        onSelectFrame({
-            frameId: frameId,
-            frameUrl: frame?.frameUrl || null,
-            previewUrl: previewUrls[frameId] || photoUrl,
-            frameName: frame?.name || (frameId === 'none' ? 'No Frame' : 'Custom Frame') // Add frame name
-        });
+        if (frame) {
+            // If we already have a preview, use it
+            if (previewUrls[frameId]) {
+                // Notify parent component about frame selection
+                onSelectFrame({
+                    frameId: frameId,
+                    frameUrl: frame?.frameUrl || null,
+                    previewUrl: previewUrls[frameId] || photoUrl,
+                    frameName: frame?.name || (frameId === 'none' ? 'No Frame' : 'Custom Frame')
+                });
+
+                // Also inform parent that preview is ready
+                onPreviewReady(previewUrls[frameId]);
+            } else {
+                // Otherwise start processing this frame
+                if (!processingFrames.includes(frameId)) {
+                    setProcessingFrames(prev => [...prev, frameId]);
+                    setLoading(prev => ({ ...prev, [frameId]: true }));
+                }
+            }
+        }
+    };
+
+    // Handle frame preview processing completion
+    const handlePreviewProcessed = (frameId, previewUrl) => {
+        // Update preview URLs
+        setPreviewUrls(prev => ({
+            ...prev,
+            [frameId]: previewUrl
+        }));
+
+        // Update loading state
+        setLoading(prev => ({ ...prev, [frameId]: false }));
+
+        // Remove from processing list
+        setProcessingFrames(prev => prev.filter(id => id !== frameId));
+
+        // If this is the selected frame, notify parent
+        if (frameId === selectedFrame) {
+            const frame = frames.find(f => f.id === frameId);
+
+            onSelectFrame({
+                frameId: frameId,
+                frameUrl: frame?.frameUrl || null,
+                previewUrl: previewUrl || photoUrl,
+                frameName: frame?.name || (frameId === 'none' ? 'No Frame' : 'Custom Frame')
+            });
+
+            onPreviewReady(previewUrl);
+        }
+    };
+
+    // Handle processing error
+    const handleProcessingError = (frameId, errorMsg) => {
+        console.error(`Error processing frame ${frameId}:`, errorMsg);
+
+        // Update loading state
+        setLoading(prev => ({ ...prev, [frameId]: false }));
+
+        // Remove from processing list
+        setProcessingFrames(prev => prev.filter(id => id !== frameId));
+
+        // For the 'none' option, just use the original photo
+        if (frameId === 'none') {
+            setPreviewUrls(prev => ({
+                ...prev,
+                [frameId]: photoUrl
+            }));
+
+            if (frameId === selectedFrame) {
+                onPreviewReady(photoUrl);
+            }
+        }
     };
 
     if (!isOpen) return null;
@@ -164,6 +190,18 @@ const FrameSelection = ({
                                         ) : (
                                             <Icon path={mdiImageOff} size={2} className="text-gray-300" />
                                         )}
+
+                                        {/* Client-side frame processor */}
+                                        {frame.id !== 'none' && processingFrames.includes(frame.id) && (
+                                            <ClientSideFrameProcessor
+                                                photoUrl={photoUrl}
+                                                frameUrl={frame.frameUrl}
+                                                onProcessed={(previewUrl) => handlePreviewProcessed(frame.id, previewUrl)}
+                                                onError={(errorMsg) => handleProcessingError(frame.id, errorMsg)}
+                                                showLoader={false}
+                                                quality={75} // Lower quality for previews
+                                            />
+                                        )}
                                     </div>
 
                                     {/* Frame name */}
@@ -192,6 +230,19 @@ const FrameSelection = ({
                             </button>
                         </div>
                     </>
+                )}
+
+                {/* Process "None" option to handle its preview */}
+                {frames.some(f => f.id === 'none') && !previewUrls['none'] && (
+                    <div className="hidden">
+                        <ClientSideFrameProcessor
+                            photoUrl={photoUrl}
+                            frameUrl={null}
+                            onProcessed={(previewUrl) => handlePreviewProcessed('none', photoUrl)}
+                            onError={(errorMsg) => handleProcessingError('none', errorMsg)}
+                            showLoader={false}
+                        />
+                    </div>
                 )}
             </motion.div>
         </motion.div>

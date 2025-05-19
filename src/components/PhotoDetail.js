@@ -1,9 +1,10 @@
-import React, {useState, useEffect, useCallback} from 'react';
-import {useParams, useNavigate} from 'react-router-dom';
-import {motion, AnimatePresence} from 'framer-motion';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import Icon from '@mdi/react';
 import Loading from './Loading';
 import FrameSelection from './FrameSelection';
+import ClientSideFrameProcessor from './ClientSideFrameProcessor';
 import {
     mdiArrowLeft,
     mdiDownload,
@@ -24,7 +25,7 @@ import { downloadFramedPhoto } from '../utils/frameService';
 const BASE_URL = '//photo-view.slyrix.com';
 
 const PhotoDetail = () => {
-    const {photoId} = useParams();
+    const { photoId } = useParams();
     const navigate = useNavigate();
     const [photo, setPhoto] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -44,6 +45,7 @@ const PhotoDetail = () => {
     });
     const [activePreviewUrl, setActivePreviewUrl] = useState(null);
     const [previewError, setPreviewError] = useState(false);
+    const [isProcessingFrame, setIsProcessingFrame] = useState(false);
 
     // Fetch photo metadata when component mounts or photoId changes
     useEffect(() => {
@@ -161,42 +163,37 @@ const PhotoDetail = () => {
     // Handle frame selection
     const handleSelectFrame = (frameData) => {
         setSelectedFrame(frameData);
+        setIsProcessingFrame(true);
 
-        // Only update the preview URL if we actually have one
-        if (frameData.previewUrl) {
-            setImageLoaded(false);
-            setPreviewError(false);
-
-            // Pre-load the image to test if it works
-            const img = new Image();
-            img.onload = () => {
-                setActivePreviewUrl(frameData.previewUrl);
-            };
-            img.onerror = () => {
-                console.error('Preview image failed to load:', frameData.previewUrl);
-                // Fall back to original photo if preview fails
-                setActivePreviewUrl(photo.url);
-                setPreviewError(true);
-            };
-            img.src = frameData.previewUrl;
+        // If this is the "none" option, just use the original photo
+        if (frameData.frameId === 'none') {
+            setActivePreviewUrl(photo.url);
+            setIsProcessingFrame(false);
+            setImageLoaded(true);
+            return;
         }
+
+        // For other frames, we'll let the ClientSideFrameProcessor handle it
+        // The actual update will happen in handlePreviewReady
     };
 
     // Handle frame preview ready
     const handlePreviewReady = (previewUrl) => {
         if (previewUrl) {
-            // Pre-load the image to test if it works
-            const img = new Image();
-            img.onload = () => {
-                setActivePreviewUrl(previewUrl);
-                setPreviewError(false);
-            };
-            img.onerror = () => {
-                console.error('Preview image failed to load:', previewUrl);
-                setPreviewError(true);
-            };
-            img.src = previewUrl;
+            setActivePreviewUrl(previewUrl);
+            setPreviewError(false);
+            setIsProcessingFrame(false);
         }
+    };
+
+    // Handle frame processing error
+    const handleProcessingError = (errorMsg) => {
+        console.error('Error processing frame:', errorMsg);
+        setPreviewError(true);
+        setIsProcessingFrame(false);
+
+        // Fall back to original photo
+        setActivePreviewUrl(photo?.url);
     };
 
     // Handle image download
@@ -300,6 +297,20 @@ const PhotoDetail = () => {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-christian-accent/10 to-hindu-accent/10 py-6 px-4">
+            {/* Client-side frame processor (hidden) */}
+            {isProcessingFrame && selectedFrame.frameId !== 'none' && (
+                <div className="hidden">
+                    <ClientSideFrameProcessor
+                        photoUrl={photo.url}
+                        frameUrl={selectedFrame.frameUrl}
+                        onProcessed={handlePreviewReady}
+                        onError={handleProcessingError}
+                        showLoader={false}
+                        quality={90}
+                    />
+                </div>
+            )}
+
             <div className="container mx-auto max-w-5xl">
                 {/* Back button */}
                 <motion.button
@@ -328,7 +339,7 @@ const PhotoDetail = () => {
                         onDoubleClick={resetZoom}
                     >
                         {/* Loading placeholder */}
-                        {!imageLoaded && (
+                        {(!imageLoaded || isProcessingFrame) && (
                             <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
                                 <div
                                     className="animate-spin rounded-full h-12 w-12 border-4 border-t-wedding-love border-r-wedding-love border-b-transparent border-l-transparent"></div>
@@ -397,15 +408,24 @@ const PhotoDetail = () => {
                                     {formatDate(photo.timestamp)}
                                 </p>
 
-                                {/* Selected frame indicator - with ESLint fix */}
-                                {selectedFrame.frameId !== 'none' && (
+                                {/* Selected frame indicator */}
+                                {selectedFrame.frameId !== 'none' && !isProcessingFrame && (
                                     <p className="text-xs text-wedding-love mt-1">
                                         {previewError ?
                                             "Frame preview unavailable" :
-                                            `${selectedFrame.frameId === 'standard' ? 'Standard' :
-                                                selectedFrame.frameId === 'custom' ? 'Elegant Gold' :
-                                                    selectedFrame.frameId === 'insta' ? 'Instagram' : 'Custom'} frame applied`
+                                            `${selectedFrame.frameName || 'Custom'} frame applied`
                                         }
+                                    </p>
+                                )}
+
+                                {/* Processing indicator */}
+                                {isProcessingFrame && (
+                                    <p className="text-xs text-christian-accent mt-1 flex items-center">
+                                        <svg className="animate-spin h-3 w-3 mr-1" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                        </svg>
+                                        Applying frame...
                                     </p>
                                 )}
                             </div>
@@ -418,6 +438,7 @@ const PhotoDetail = () => {
                                     whileTap={{scale: 0.95}}
                                     onClick={handleOpenFrameSelection}
                                     className="btn btn-outline flex items-center text-sm px-4 py-2 rounded-full border border-hindu-accent text-hindu-accent hover:bg-hindu-accent hover:text-white"
+                                    disabled={isProcessingFrame}
                                 >
                                     <Icon path={mdiImageFrame} size={0.8} className="mr-2"/>
                                     <span>{selectedFrame.frameId !== 'none' ? 'Change Frame' : 'Add Frame'}</span>
@@ -473,6 +494,7 @@ const PhotoDetail = () => {
                                     whileTap={{scale: 0.95}}
                                     onClick={handleDownload}
                                     className="btn btn-outline btn-christian-outline flex items-center"
+                                    disabled={isProcessingFrame}
                                 >
                                     <AnimatePresence mode="wait">
                                         {downloadSuccess ? (
