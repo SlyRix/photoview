@@ -13,7 +13,7 @@ const FrameSelection = ({
                             onClose
                         }) => {
     const [frames, setFrames] = useState([]);
-    const [selectedFrame, setSelectedFrame] = useState('standard');
+    const [selectedFrame, setSelectedFrame] = useState('standard'); // MODIFIED: Default is 'standard' instead of 'none'
     const [previewUrls, setPreviewUrls] = useState({});
     const [loading, setLoading] = useState({});
     const [error, setError] = useState(null);
@@ -54,7 +54,7 @@ const FrameSelection = ({
                     frameId: frameId,
                     frameUrl: frame?.frameUrl || null,
                     previewUrl: previewUrls[frameId] || photoUrl,
-                    frameName: frame?.name || (frameId === 'none' ? 'No Frame' : 'Custom Frame')
+                    frameName: frame?.name || 'Custom Frame'
                 });
 
                 // Also inform parent that preview is ready
@@ -91,7 +91,7 @@ const FrameSelection = ({
                 frameId: frameId,
                 frameUrl: frame?.frameUrl || null,
                 previewUrl: previewUrl || photoUrl,
-                frameName: frame?.name || (frameId === 'none' ? 'No Frame' : 'Custom Frame')
+                frameName: frame?.name || 'Custom Frame'
             });
 
             onPreviewReady(previewUrl);
@@ -107,18 +107,6 @@ const FrameSelection = ({
 
         // Remove from processing list
         setProcessingFrames(prev => prev.filter(id => id !== frameId));
-
-        // For the 'none' option, just use the original photo
-        if (frameId === 'none') {
-            setPreviewUrls(prev => ({
-                ...prev,
-                [frameId]: photoUrl
-            }));
-
-            if (frameId === selectedFrame) {
-                onPreviewReady(photoUrl);
-            }
-        }
     };
 
     if (!isOpen) return null;
@@ -162,7 +150,7 @@ const FrameSelection = ({
                     </div>
                 ) : (
                     <>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
                             {frames.map((frame) => (
                                 <div
                                     key={frame.id}
@@ -183,16 +171,12 @@ const FrameSelection = ({
                                                 alt={`${frame.name} frame preview`}
                                                 className="w-full h-full object-cover"
                                             />
-                                        ) : frame.id === 'none' ? (
-                                            <div className="w-full h-full flex items-center justify-center bg-gray-100">
-                                                <p className="text-sm text-gray-500">Original Photo</p>
-                                            </div>
                                         ) : (
                                             <Icon path={mdiImageOff} size={2} className="text-gray-300" />
                                         )}
 
                                         {/* Client-side frame processor */}
-                                        {frame.id !== 'none' && processingFrames.includes(frame.id) && (
+                                        {processingFrames.includes(frame.id) && (
                                             <ClientSideFrameProcessor
                                                 photoUrl={photoUrl}
                                                 frameUrl={frame.frameUrl}
@@ -230,19 +214,6 @@ const FrameSelection = ({
                             </button>
                         </div>
                     </>
-                )}
-
-                {/* Process "None" option to handle its preview */}
-                {frames.some(f => f.id === 'none') && !previewUrls['none'] && (
-                    <div className="hidden">
-                        <ClientSideFrameProcessor
-                            photoUrl={photoUrl}
-                            frameUrl={null}
-                            onProcessed={(previewUrl) => handlePreviewProcessed('none', photoUrl)}
-                            onError={(errorMsg) => handleProcessingError('none', errorMsg)}
-                            showLoader={false}
-                        />
-                    </div>
                 )}
             </motion.div>
         </motion.div>

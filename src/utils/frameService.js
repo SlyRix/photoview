@@ -1,7 +1,7 @@
-// src/utils/frameService.js - Client-side version
+// Updated src/utils/frameService.js - Removed the "none" option
 /**
  * Frame service utility for processing photos with frames
- * This version uses client-side Canvas processing instead of server API calls
+ * Enhanced to always use frames - no "none" option available
  */
 
 // Cache for loaded images
@@ -49,12 +49,12 @@ export const clearImageCache = () => {
 };
 
 /**
- * Fetch available frame options
+ * Fetch available frame options - MODIFIED: removed "none" option
  * @returns {Promise<Array>} Array of frame objects
  */
 export const getFrameOptions = async () => {
     try {
-        // Default frames (hardcoded since we're not using server API)
+        // Default frames - "none" option removed
         return [
             {
                 id: 'standard',
@@ -73,13 +73,8 @@ export const getFrameOptions = async () => {
                 name: 'Instagram',
                 thumbnailUrl: '/frames/insta-thumbnail.png',
                 frameUrl: '/frames/wedding-frame-insta.png'
-            },
-            {
-                id: 'none',
-                name: 'No Frame',
-                thumbnailUrl: null,
-                frameUrl: null
             }
+            // "none" option removed per requirement
         ];
     } catch (error) {
         console.error('Error fetching frame options:', error);
@@ -96,14 +91,15 @@ export const getFrameOptions = async () => {
  */
 export const applyFrameToPhoto = async (photoUrl, frameUrl, options = {}) => {
     try {
-        // If no frame is selected, return the original photo
+        // If for some reason no frame is selected, ensure we have a default
         if (!frameUrl) {
-            return photoUrl;
+            console.warn('No frame specified, using standard frame');
+            // Use standard frame as fallback
+            frameUrl = '/frames/wedding-frame-standard.png';
         }
 
         const {
             quality = 90,
-            // ENHANCED: Increased scale factor from 0.85 to 0.95 to fill more of the frame
             scaleFactor = 0.95,
             background = { r: 255, g: 255, b: 255 }
         } = options;
@@ -162,7 +158,7 @@ export const generateFramePreview = async (photoUrl, frameUrl) => {
         // For previews, use lower quality for faster generation
         return await applyFrameToPhoto(photoUrl, frameUrl, {
             quality: 75,
-            scaleFactor: 0.95 // ENHANCED: Increased from 0.85 to make photo fill more of the frame
+            scaleFactor: 0.95
         });
     } catch (error) {
         console.error('Error generating frame preview:', error);
@@ -180,19 +176,12 @@ export const generateFramePreview = async (photoUrl, frameUrl) => {
  */
 export const downloadFramedPhoto = async (photoUrl, frameUrl, filename = 'wedding-photo.jpg') => {
     try {
-        // If no frame is selected, download the original photo
-        let downloadUrl;
-
-        if (!frameUrl) {
-            // Use the original photo URL
-            downloadUrl = photoUrl;
-        } else {
-            // Generate high-quality framed photo
-            downloadUrl = await applyFrameToPhoto(photoUrl, frameUrl, {
-                quality: 95,  // High quality for downloads
-                scaleFactor: 0.97 // ENHANCED: Increased from 0.92 to nearly fill the entire frame
-            });
-        }
+        // Generate high-quality framed photo
+        // If frameUrl is not provided, the applyFrameToPhoto function will use the standard frame
+        const downloadUrl = await applyFrameToPhoto(photoUrl, frameUrl, {
+            quality: 95,  // High quality for downloads
+            scaleFactor: 0.97 // Fill nearly the entire frame
+        });
 
         // Create a temporary link element and trigger the download
         const link = document.createElement('a');

@@ -1,9 +1,14 @@
+// src/components/Gallery.js
+// Updated with dateUtils for consistent timestamp handling
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import PhotoCard from './PhotoCard';
 import Loading from './Loading';
 import Icon from '@mdi/react';
 import { mdiHeartOutline, mdiImageMultiple, mdiRefresh, mdiAlert, mdiCamera } from '@mdi/js';
+// Import date utility functions
+import { formatDate } from '../utils/dateUtils';
 
 // Base URL for the server
 const BASE_URL = '//photo-view.slyrix.com';
@@ -74,7 +79,7 @@ const Gallery = () => {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [retryCount]);
 
     useEffect(() => {
         fetchPhotos();
@@ -235,7 +240,8 @@ const Gallery = () => {
             <div className="mb-4 text-center">
                 <p className="text-sm text-gray-500">
                     Showing {photos.length} {photos.length === 1 ? 'photo' : 'photos'}
-                    {lastUpdated && ` • Last updated ${lastUpdated.toLocaleTimeString()}`}
+                    {/* Update to use formatDate utility for lastUpdated */}
+                    {lastUpdated && ` • Last updated ${formatDate(lastUpdated, 'time')}`}
                 </p>
 
                 {loading && photos.length > 0 && (
@@ -267,7 +273,7 @@ const Gallery = () => {
                 ))}
             </motion.div>
 
-            {/* Pagination - Simplified for mobile */}
+            {/* Pagination - left unchanged */}
             {totalPages > 1 && (
                 <div className="mt-8 flex justify-center">
                     <nav className="inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
@@ -287,7 +293,7 @@ const Gallery = () => {
                             </svg>
                         </button>
 
-                        {/* Page numbers - Mobile friendly version with limited page numbers */}
+                        {/* Page numbers - unchanged */}
                         {(() => {
                             const pages = [];
                             const maxVisiblePages = 3; // Show max 3 pages on mobile

@@ -1,9 +1,10 @@
-// Updated src/components/Header.js
+// Updated src/components/Header.js to include logout button
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import Icon from '@mdi/react';
-import { mdiImage, mdiHeart, mdiHome, mdiCamera } from '@mdi/js';
+import { mdiImage, mdiHeart, mdiHome } from '@mdi/js';
+import { LogoutButton } from '../AuthContext';
 
 const Header = () => {
     const location = useLocation();
@@ -53,6 +54,9 @@ const Header = () => {
                         <Icon path={mdiImage} size={0.9} />
                         <span className="hidden md:inline text-sm">Gallery</span>
                     </Link>
+
+                    {/* Added Logout Button */}
+                    <LogoutButton />
                 </div>
             </div>
 

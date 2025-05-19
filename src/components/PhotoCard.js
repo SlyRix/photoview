@@ -1,38 +1,40 @@
+// src/components/PhotoCard.js - FIXED version
+
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import Icon from '@mdi/react';
 import { mdiImage, mdiClock, mdiReload, mdiFire } from '@mdi/js';
+// Import date utility functions
+import { formatDate, isRecentlyTaken, extractTimestampFromFilename } from '../utils/dateUtils';
 
 const PhotoCard = ({ photo }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(false);
     const [retryCount, setRetryCount] = useState(0);
 
-    // Format date for display
-    const formatDate = (timestamp) => {
-        if (!timestamp) return 'Unknown date';
+    // Extract timestamp from filename if available (highest priority)
+    const getPhotoTimestamp = () => {
+        // First try filename or id if they contain a timestamp
+        const filename = photo.filename || photo.id || '';
+        const filenameTimestamp = extractTimestampFromFilename(filename);
 
-        try {
-            const date = new Date(timestamp);
-            return date.toLocaleDateString(undefined, {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric'
-            });
-        } catch (e) {
-            return 'Unknown date';
+        if (filenameTimestamp) {
+            // For debugging
+            console.log('Using timestamp from filename:', new Date(filenameTimestamp).toISOString());
+            return filenameTimestamp;
         }
-    };
 
-    // Check if photo was taken recently (within last 10 minutes)
-    const isRecentlyTaken = () => {
-        if (!photo.timestamp) return false;
+        // Fall back to the timestamp provided in the photo object
+        if (photo.timestamp) {
+            console.log('Using provided timestamp:', typeof photo.timestamp === 'number' ?
+                new Date(photo.timestamp).toISOString() : photo.timestamp);
+            return photo.timestamp;
+        }
 
-        const photoTime = new Date(photo.timestamp).getTime();
-        const tenMinutesAgo = Date.now() - (10 * 60 * 1000);
-
-        return photoTime > tenMinutesAgo;
+        // Last resort - should not happen with proper implementation
+        console.warn('No timestamp found for photo', photo.id || photo.filename);
+        return null;
     };
 
     // Handle image load error
@@ -56,14 +58,17 @@ const PhotoCard = ({ photo }) => {
         setRetryCount(prev => prev + 1);
     };
 
+    // Get actual timestamp to use for this photo card
+    const photoTimestamp = getPhotoTimestamp();
+
     return (
         <motion.div
             whileHover={{ y: -5 }}
             whileTap={{ scale: 0.98 }}
             className="bg-white rounded-lg shadow-card overflow-hidden photo-hover relative"
         >
-            {/* Recently taken indicator */}
-            {isRecentlyTaken() && (
+            {/* Recently taken indicator - using the new utility function */}
+            {isRecentlyTaken(photoTimestamp) && (
                 <div className="absolute top-2 right-2 z-10 bg-wedding-love text-white text-xs px-2 py-1 rounded-full flex items-center">
                     <Icon path={mdiFire} size={0.6} className="mr-1" />
                     <span>New</span>
@@ -111,7 +116,8 @@ const PhotoCard = ({ photo }) => {
                     <div className="flex justify-between items-center">
                         <div className="flex items-center text-xs text-gray-500">
                             <Icon path={mdiClock} size={0.6} className="mr-1" />
-                            {formatDate(photo.timestamp)}
+                            {/* Using the best timestamp with the new formatDate utility function */}
+                            {formatDate(photoTimestamp, 'short')}
                         </div>
                         <motion.div
                             whileHover={{ scale: 1.2 }}
