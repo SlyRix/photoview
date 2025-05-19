@@ -4,8 +4,21 @@
 
 @media screen and (max-width: 768px) {
   html {
-    touch-action: none;
+    /* touch-action: none; <- This was causing the scrolling issue */
+    touch-action: pan-y; /* Allow vertical scrolling */
+    -webkit-overflow-scrolling: touch; /* Enable momentum scrolling on iOS */
   }
+
+  body {
+    overflow-y: auto; /* Ensure vertical scrolling is enabled */
+  }
+}
+
+/* Make sure the main containers don't restrict scrolling */
+#root, .App {
+  min-height: 100%;
+  height: auto;
+  overflow: visible;
 }
 
 @layer base {

@@ -1,12 +1,12 @@
 // src/components/Gallery.js
-// Updated with dateUtils for consistent timestamp handling
+// Updated with sorting functionality and removed "Take More Photos" button
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import PhotoCard from './PhotoCard';
 import Loading from './Loading';
 import Icon from '@mdi/react';
-import { mdiHeartOutline, mdiImageMultiple, mdiRefresh, mdiAlert, mdiCamera } from '@mdi/js';
+import { mdiHeartOutline, mdiImageMultiple, mdiRefresh, mdiAlert, mdiSort, mdiSortCalendarDescending, mdiSortCalendarAscending } from '@mdi/js';
 // Import date utility functions
 import { formatDate } from '../utils/dateUtils';
 
@@ -21,6 +21,9 @@ const Gallery = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const photosPerPage = 8; // Reduced for mobile
     const [lastUpdated, setLastUpdated] = useState(null);
+    // Add sort state
+    const [sortOption, setSortOption] = useState('newest');
+    const [showSortOptions, setShowSortOptions] = useState(false);
 
     // Fetch photos function with improved error handling
     const fetchPhotos = useCallback(async () => {
@@ -41,30 +44,69 @@ const Gallery = () => {
 
             if (data && Array.isArray(data)) {
 
-                // Process photos to ensure they have full URLs
-                const processedPhotos = data.map(photo => ({
-                    ...photo,
-                    id: photo.filename || photo.photoId,
+                // Process photos to ensure they have full URLs and valid timestamps
+                const processedPhotos = data.map(photo => {
+                    // Get or extract timestamp from the photo
+                    let photoTimestamp;
 
-                    url: photo.url
-                        ? (photo.url.startsWith('http') ? photo.url : `${BASE_URL}${photo.url}`)
-                        : `${BASE_URL}/photos/${photo.filename || photo.photoId}`,
-                    thumbnailUrl: (() => {
-                        let url = photo.thumbnailUrl;
-
-                        if (url) {
-                            // Remove all occurrences of "original_" no matter what
-                            url = url.replace(/original_/g, '');
-                            // If it's a relative path, prepend BASE_URL
-                            return url.startsWith('http') ? url : `${BASE_URL}${url}`;
+                    // Try extracting from filename first
+                    if (photo.filename && photo.filename.includes('202')) {
+                        const match = photo.filename.match(/(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})/);
+                        if (match && match[1]) {
+                            const dateStr = match[1].replace(/-(\d{2})-(\d{2})$/, ':$1:$2');
+                            photoTimestamp = new Date(dateStr).getTime();
                         }
+                    }
 
-                        // Fallback if no thumbnailUrl is provided
-                        const rawName = photo.filename || photo.photoId;
-                        const sanitizedName = rawName.replace(/original_/g, '');
-                        return `${BASE_URL}/thumbnails/thumb_${sanitizedName}`;
-                    })()
-                }));
+                    // If no timestamp from filename, try the provided timestamp
+                    if (!photoTimestamp && photo.timestamp) {
+                        try {
+                            photoTimestamp = typeof photo.timestamp === 'number'
+                                ? photo.timestamp
+                                : new Date(photo.timestamp).getTime();
+                        } catch (e) {
+                            console.warn("Invalid timestamp format:", photo.timestamp);
+                        }
+                    }
+
+                    // If still no timestamp, use server timestamp or current time
+                    if (!photoTimestamp || isNaN(photoTimestamp)) {
+                        photoTimestamp = photo.serverTimestamp || Date.now();
+                    }
+
+                    return {
+                        ...photo,
+                        id: photo.filename || photo.photoId,
+                        url: photo.url
+                            ? (photo.url.startsWith('http') ? photo.url : `${BASE_URL}${photo.url}`)
+                            : `${BASE_URL}/photos/${photo.filename || photo.photoId}`,
+                        thumbnailUrl: (() => {
+                            let url = photo.thumbnailUrl;
+
+                            if (url) {
+                                // Remove all occurrences of "original_" no matter what
+                                url = url.replace(/original_/g, '');
+                                // If it's a relative path, prepend BASE_URL
+                                return url.startsWith('http') ? url : `${BASE_URL}${url}`;
+                            }
+
+                            // Fallback if no thumbnailUrl is provided
+                            const rawName = photo.filename || photo.photoId;
+                            const sanitizedName = rawName.replace(/original_/g, '');
+                            return `${BASE_URL}/thumbnails/thumb_${sanitizedName}`;
+                        })(),
+                        // Use the extracted/processed timestamp
+                        timestamp: photoTimestamp
+                    };
+                });
+
+                console.log("Processed photos with timestamps:",
+                    processedPhotos.map(p => ({
+                        name: p.filename,
+                        timestamp: p.timestamp,
+                        date: new Date(p.timestamp).toISOString()
+                    }))
+                );
 
                 setPhotos(processedPhotos);
                 setLastUpdated(new Date());
@@ -99,16 +141,125 @@ const Gallery = () => {
         setRetryCount(prev => prev + 1);
     };
 
-    // Handle going to photo booth
-    const handleTakeMorePhotos = () => {
-        window.location.href = "https://photobooth.example.com"; // Replace with your photo booth URL
-    };
+    // Sort the photos based on the selected option
+    const sortPhotos = useCallback((photosToSort) => {
+        if (!photosToSort || !photosToSort.length) return [];
+
+        const sorted = [...photosToSort];
+
+        switch (sortOption) {
+            case 'newest':
+                return sorted.sort((a, b) => {
+                    // More robust timestamp handling
+                    let timeA, timeB;
+
+                    try {
+                        // Try to get valid timestamps, handling different formats
+                        timeA = a.timestamp ? (typeof a.timestamp === 'number' ? a.timestamp : new Date(a.timestamp).getTime()) : 0;
+                        if (isNaN(timeA)) timeA = 0;
+
+                        timeB = b.timestamp ? (typeof b.timestamp === 'number' ? b.timestamp : new Date(b.timestamp).getTime()) : 0;
+                        if (isNaN(timeB)) timeB = 0;
+
+                        // If both timestamps are invalid or equal, try using filenames as fallback
+                        if ((timeA === 0 && timeB === 0) || timeA === timeB) {
+                            // Extract dates from filenames as fallback
+                            const filenameA = a.filename || a.id || '';
+                            const filenameB = b.filename || b.id || '';
+
+                            // Look for date patterns in filenames
+                            const dateMatchA = filenameA.match(/(\d{4}-\d{2}-\d{2})/);
+                            const dateMatchB = filenameB.match(/(\d{4}-\d{2}-\d{2})/);
+
+                            if (dateMatchA && dateMatchB) {
+                                return new Date(dateMatchB[0]).getTime() - new Date(dateMatchA[0]).getTime();
+                            }
+
+                            // If still no valid comparison, sort by filename
+                            return filenameB.localeCompare(filenameA);
+                        }
+                    } catch (err) {
+                        console.error("Sorting error:", err);
+                        return 0;
+                    }
+
+                    // Sort newest first (higher timestamp value = more recent)
+                    return timeB - timeA;
+                });
+
+            case 'oldest':
+                return sorted.sort((a, b) => {
+                    // More robust timestamp handling
+                    let timeA, timeB;
+
+                    try {
+                        // Try to get valid timestamps, handling different formats
+                        timeA = a.timestamp ? (typeof a.timestamp === 'number' ? a.timestamp : new Date(a.timestamp).getTime()) : 0;
+                        if (isNaN(timeA)) timeA = 0;
+
+                        timeB = b.timestamp ? (typeof b.timestamp === 'number' ? b.timestamp : new Date(b.timestamp).getTime()) : 0;
+                        if (isNaN(timeB)) timeB = 0;
+
+                        // If both timestamps are invalid or equal, try using filenames as fallback
+                        if ((timeA === 0 && timeB === 0) || timeA === timeB) {
+                            // Extract dates from filenames as fallback
+                            const filenameA = a.filename || a.id || '';
+                            const filenameB = b.filename || b.id || '';
+
+                            // Look for date patterns in filenames
+                            const dateMatchA = filenameA.match(/(\d{4}-\d{2}-\d{2})/);
+                            const dateMatchB = filenameB.match(/(\d{4}-\d{2}-\d{2})/);
+
+                            if (dateMatchA && dateMatchB) {
+                                return new Date(dateMatchA[0]).getTime() - new Date(dateMatchB[0]).getTime();
+                            }
+
+                            // If still no valid comparison, sort by filename
+                            return filenameA.localeCompare(filenameB);
+                        }
+                    } catch (err) {
+                        console.error("Sorting error:", err);
+                        return 0;
+                    }
+
+                    // Sort oldest first (lower timestamp value = older)
+                    return timeA - timeB;
+                });
+
+            case 'nameAsc':
+                return sorted.sort((a, b) => {
+                    // Sort by filename A-Z
+                    const nameA = (a.filename || a.id || '').toLowerCase();
+                    const nameB = (b.filename || b.id || '').toLowerCase();
+                    return nameA.localeCompare(nameB);
+                });
+
+            case 'nameDesc':
+                return sorted.sort((a, b) => {
+                    // Sort by filename Z-A
+                    const nameA = (a.filename || a.id || '').toLowerCase();
+                    const nameB = (b.filename || b.id || '').toLowerCase();
+                    return nameB.localeCompare(nameA);
+                });
+
+            default:
+                return sorted;
+        }
+    }, [sortOption]);
+
+    // Use effect to re-sort photos when sortOption changes
+    useEffect(() => {
+        setCurrentPage(1); // Reset to first page when sort option changes
+    }, [sortOption]);
+
+    // Sort the photos
+    const sortedPhotos = useMemo(() => sortPhotos(photos), [photos, sortPhotos]);
 
     // Calculate pagination
     const indexOfLastPhoto = currentPage * photosPerPage;
     const indexOfFirstPhoto = indexOfLastPhoto - photosPerPage;
-    const currentPhotos = photos.slice(indexOfFirstPhoto, indexOfLastPhoto);
-    const totalPages = Math.ceil(photos.length / photosPerPage);
+    const currentPhotos = sortedPhotos.slice(indexOfFirstPhoto, indexOfLastPhoto);
+    const totalPages = Math.ceil(sortedPhotos.length / photosPerPage);
 
     // Handle page changes
     const goToPage = (pageNumber) => {
@@ -171,23 +322,13 @@ const Gallery = () => {
                 <Icon path={mdiImageMultiple} size={3} className="text-christian-accent/40 mx-auto mb-4" />
                 <h2 className="text-2xl font-bold mb-4">No Photos Yet</h2>
                 <p className="text-gray-600 mb-6">Photos will appear here once they've been uploaded.</p>
-                <div className="flex flex-col space-y-4">
-                    <button
-                        onClick={handleRetry}
-                        className="btn btn-outline btn-christian-outline flex items-center mx-auto"
-                    >
-                        <Icon path={mdiRefresh} size={1} className="mr-2" />
-                        Check Again
-                    </button>
-
-                    <button
-                        onClick={handleTakeMorePhotos}
-                        className="btn btn-primary btn-christian flex items-center mx-auto"
-                    >
-                        <Icon path={mdiCamera} size={1} className="mr-2" />
-                        Take Photos
-                    </button>
-                </div>
+                <button
+                    onClick={handleRetry}
+                    className="btn btn-outline btn-christian-outline flex items-center mx-auto"
+                >
+                    <Icon path={mdiRefresh} size={1} className="mr-2" />
+                    Check Again
+                </button>
             </div>
         );
     }
@@ -222,37 +363,95 @@ const Gallery = () => {
                 >
                     Browse photos from Rushel & Sivani's special day
                 </motion.p>
-
-                {/* Take More Photos Button */}
-                <motion.button
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.8, delay: 0.6 }}
-                    onClick={handleTakeMorePhotos}
-                    className="mt-4 btn btn-primary btn-christian flex items-center mx-auto"
-                >
-                    <Icon path={mdiCamera} size={1} className="mr-2" />
-                    Take More Photos
-                </motion.button>
             </div>
 
-            {/* Photo count */}
-            <div className="mb-4 text-center">
+            {/* Photo count and Sort dropdown */}
+            <div className="mb-4 flex flex-wrap justify-between items-center">
                 <p className="text-sm text-gray-500">
                     Showing {photos.length} {photos.length === 1 ? 'photo' : 'photos'}
-                    {/* Update to use formatDate utility for lastUpdated */}
                     {lastUpdated && ` • Last updated ${formatDate(lastUpdated, 'time')}`}
                 </p>
 
+                {/* Sort dropdown */}
+                <div className="relative">
+                    <button
+                        onClick={() => setShowSortOptions(!showSortOptions)}
+                        className="flex items-center text-sm text-gray-700 hover:text-christian-accent bg-white border border-gray-200 rounded-md px-3 py-1.5 shadow-sm"
+                    >
+                        <Icon path={mdiSort} size={0.7} className="mr-2" />
+                        <span>Sort: {
+                            sortOption === 'newest' ? 'Newest First' :
+                                sortOption === 'oldest' ? 'Oldest First' :
+                                    sortOption === 'nameAsc' ? 'Name (A-Z)' :
+                                        'Name (Z-A)'
+                        }</span>
+                    </button>
+
+                    {/* Sort options dropdown */}
+                    {showSortOptions && (
+                        <div className="absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg z-10 border border-gray-100">
+                            <ul className="py-1">
+                                <li
+                                    className={`px-4 py-2 text-sm cursor-pointer flex items-center ${sortOption === 'newest' ? 'bg-gray-100 text-christian-accent font-medium' : 'hover:bg-gray-50'}`}
+                                    onClick={() => {
+                                        setSortOption('newest');
+                                        setShowSortOptions(false);
+                                        setCurrentPage(1); // Reset to first page when sorting changes
+                                    }}
+                                >
+                                    <Icon path={mdiSortCalendarDescending} size={0.7} className="mr-2" />
+                                    Newest First
+                                </li>
+                                <li
+                                    className={`px-4 py-2 text-sm cursor-pointer flex items-center ${sortOption === 'oldest' ? 'bg-gray-100 text-christian-accent font-medium' : 'hover:bg-gray-50'}`}
+                                    onClick={() => {
+                                        setSortOption('oldest');
+                                        setShowSortOptions(false);
+                                        setCurrentPage(1); // Reset to first page when sorting changes
+                                    }}
+                                >
+                                    <Icon path={mdiSortCalendarAscending} size={0.7} className="mr-2" />
+                                    Oldest First
+                                </li>
+                                <li
+                                    className={`px-4 py-2 text-sm cursor-pointer flex items-center ${sortOption === 'nameAsc' ? 'bg-gray-100 text-christian-accent font-medium' : 'hover:bg-gray-50'}`}
+                                    onClick={() => {
+                                        setSortOption('nameAsc');
+                                        setShowSortOptions(false);
+                                        setCurrentPage(1); // Reset to first page when sorting changes
+                                    }}
+                                >
+                                    <Icon path={mdiSort} size={0.7} className="mr-2" />
+                                    Name (A-Z)
+                                </li>
+                                <li
+                                    className={`px-4 py-2 text-sm cursor-pointer flex items-center ${sortOption === 'nameDesc' ? 'bg-gray-100 text-christian-accent font-medium' : 'hover:bg-gray-50'}`}
+                                    onClick={() => {
+                                        setSortOption('nameDesc');
+                                        setShowSortOptions(false);
+                                        setCurrentPage(1); // Reset to first page when sorting changes
+                                    }}
+                                >
+                                    <Icon path={mdiSort} size={0.7} className="mr-2" />
+                                    Name (Z-A)
+                                </li>
+                            </ul>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Loading indicator and refresh button */}
+            <div className="text-center mb-6">
                 {loading && photos.length > 0 && (
-                    <p className="text-xs text-christian-accent mt-1">
+                    <p className="text-xs text-christian-accent">
                         <span className="inline-block animate-spin mr-1">⟳</span> Refreshing...
                     </p>
                 )}
 
                 <button
                     onClick={handleRetry}
-                    className="text-sm text-christian-accent hover:underline flex items-center justify-center mx-auto mt-1"
+                    className="text-sm text-christian-accent hover:underline flex items-center justify-center mx-auto"
                 >
                     <Icon path={mdiRefresh} size={0.6} className="mr-1" />
                     Refresh
@@ -273,7 +472,7 @@ const Gallery = () => {
                 ))}
             </motion.div>
 
-            {/* Pagination - left unchanged */}
+            {/* Pagination */}
             {totalPages > 1 && (
                 <div className="mt-8 flex justify-center">
                     <nav className="inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
@@ -293,7 +492,7 @@ const Gallery = () => {
                             </svg>
                         </button>
 
-                        {/* Page numbers - unchanged */}
+                        {/* Page numbers */}
                         {(() => {
                             const pages = [];
                             const maxVisiblePages = 3; // Show max 3 pages on mobile

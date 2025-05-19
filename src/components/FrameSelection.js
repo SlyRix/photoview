@@ -13,7 +13,7 @@ const FrameSelection = ({
                             onClose
                         }) => {
     const [frames, setFrames] = useState([]);
-    const [selectedFrame, setSelectedFrame] = useState('standard'); // MODIFIED: Default is 'standard' instead of 'none'
+    const [selectedFrame, setSelectedFrame] = useState('standard'); // Default to standard frame
     const [previewUrls, setPreviewUrls] = useState({});
     const [loading, setLoading] = useState({});
     const [error, setError] = useState(null);

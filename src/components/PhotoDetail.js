@@ -1,5 +1,3 @@
-// src/components/PhotoDetail.js - FIXED version for Photo IDs
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -18,7 +16,6 @@ import {
     mdiFacebook,
     mdiEmailOutline,
     mdiRefresh,
-    mdiCamera,
     mdiImageFrame
 } from '@mdi/js';
 import { downloadFramedPhoto } from '../utils/frameService';
@@ -43,14 +40,21 @@ const PhotoDetail = () => {
     const [scale, setScale] = useState(1);
     const [lastTap, setLastTap] = useState(0);
     const [selectedFrame, setSelectedFrame] = useState({
-        frameId: 'none',
-        frameUrl: null,
-        previewUrl: null
+        frameId: 'standard', // Default to standard frame instead of 'none'
+        frameUrl: '/frames/wedding-frame-standard.png',
+        previewUrl: null,
+        frameName: 'Standard'
     });
     const [activePreviewUrl, setActivePreviewUrl] = useState(null);
     const [previewError, setPreviewError] = useState(false);
     const [isProcessingFrame, setIsProcessingFrame] = useState(false);
-
+// Set up automatic frame processing when photo loads
+    useEffect(() => {
+        // When photo is loaded, process it with the standard frame
+        if (photo && !previewError && selectedFrame.frameId === 'standard') {
+            setIsProcessingFrame(true);
+        }
+    }, [photo]);
     // Fetch photo metadata when component mounts or photoId changes
     useEffect(() => {
         async function fetchPhoto() {
@@ -97,8 +101,14 @@ const PhotoDetail = () => {
                     };
 
                     setPhoto(photoData);
+
+                    // Instead of showing original photo, immediately start processing with the standard frame
+                    // We'll still set the active preview URL to the original photo as a fallback
                     setActivePreviewUrl(photoData.url);
                     setLoading(false);
+
+                    // Begin processing the standard frame
+                    setIsProcessingFrame(true);
                 } else {
                     throw new Error('Photo metadata not found');
                 }
@@ -120,8 +130,13 @@ const PhotoDetail = () => {
                         timestamp: photoTimestamp || Date.now() // Use extracted timestamp or current time
                     };
                     setPhoto(photoData);
+
+                    // Instead of showing original photo, prepare for framing
                     setActivePreviewUrl(photoData.url);
                     setLoading(false);
+
+                    // Begin processing the standard frame
+                    setIsProcessingFrame(true);
                 };
 
                 testImg.onerror = () => {
@@ -152,14 +167,17 @@ const PhotoDetail = () => {
     // Reset to original photo
     const resetToOriginalPhoto = () => {
         if (photo) {
+            // Instead of setting frame to 'none', revert to standard frame
             setActivePreviewUrl(photo.url);
             setPreviewError(false);
             setImageLoaded(false);
             setSelectedFrame({
-                frameId: 'none',
-                frameUrl: null,
-                previewUrl: null
+                frameId: 'standard',
+                frameUrl: '/frames/wedding-frame-standard.png',
+                previewUrl: null,
+                frameName: 'Standard'
             });
+            setIsProcessingFrame(true);
         }
     };
 
@@ -270,11 +288,6 @@ const PhotoDetail = () => {
         setScale(1);
     };
 
-    // Go to photo booth app
-    const handleTakeMorePhotos = () => {
-        window.location.href = "//photobooth.example.com"; // Replace with your photo booth URL
-    };
-
     // If loading, show loading component
     if (loading) {
         return <Loading message="Loading photo..."/>;
@@ -311,10 +324,10 @@ const PhotoDetail = () => {
     return (
         <div className="min-h-screen bg-gradient-to-br from-christian-accent/10 to-hindu-accent/10 py-6 px-4">
             {/* Client-side frame processor (hidden) */}
-            {isProcessingFrame && selectedFrame.frameId !== 'none' && (
+            {(isProcessingFrame || photo) && selectedFrame.frameId !== 'none' && (
                 <div className="hidden">
                     <ClientSideFrameProcessor
-                        photoUrl={photo.url}
+                        photoUrl={photo?.url}
                         frameUrl={selectedFrame.frameUrl}
                         onProcessed={handlePreviewReady}
                         onError={handleProcessingError}
@@ -448,7 +461,7 @@ const PhotoDetail = () => {
                                 )}
                             </div>
 
-                            {/* Action buttons - unchanged */}
+                            {/* Action buttons - Modified to remove "Take More Photos" button */}
                             <div className="flex flex-wrap gap-3">
                                 {/* Frame Selection Button */}
                                 <motion.button
@@ -459,18 +472,7 @@ const PhotoDetail = () => {
                                     disabled={isProcessingFrame}
                                 >
                                     <Icon path={mdiImageFrame} size={0.8} className="mr-2"/>
-                                    <span>{selectedFrame.frameId !== 'none' ? 'Change Frame' : 'Add Frame'}</span>
-                                </motion.button>
-
-                                {/* Take More Photos button */}
-                                <motion.button
-                                    whileHover={{scale: 1.05}}
-                                    whileTap={{scale: 0.95}}
-                                    onClick={handleTakeMorePhotos}
-                                    className="btn btn-outline flex items-center text-sm px-4 py-2 rounded-full border border-gray-300 bg-white shadow-sm"
-                                >
-                                    <Icon path={mdiCamera} size={0.8} className="mr-2"/>
-                                    <span>Take More Photos</span>
+                                    <span>Change Frame</span>
                                 </motion.button>
 
                                 {/* Share button */}
@@ -573,7 +575,96 @@ const PhotoDetail = () => {
                             className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
                             onClick={() => setShareOpen(false)}
                         >
-                            {/* Share modal content remains unchanged */}
+                            <motion.div
+                                initial={{opacity: 0, scale: 0.9, y: 20}}
+                                animate={{opacity: 1, scale: 1, y: 0}}
+                                exit={{opacity: 0, scale: 0.9, y: 20}}
+                                className="bg-white rounded-lg shadow-lg max-w-md w-full p-6"
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <h3 className="text-xl font-bold mb-4">Share this photo</h3>
+
+                                <div className="grid grid-cols-4 gap-4 mb-6">
+                                    {/* WhatsApp */}
+                                    <a
+                                        href={`https://wa.me/?text=Check%20out%20this%20photo%20from%20Rushel%20%26%20Sivani%27s%20wedding!%20${encodeURIComponent(window.location.href)}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex flex-col items-center text-center"
+                                    >
+                                        <div className="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center text-white mb-2">
+                                            <Icon path={mdiWhatsapp} size={1.3} />
+                                        </div>
+                                        <span className="text-xs">WhatsApp</span>
+                                    </a>
+
+                                    {/* Facebook */}
+                                    <a
+                                        href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex flex-col items-center text-center"
+                                    >
+                                        <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white mb-2">
+                                            <Icon path={mdiFacebook} size={1.3} />
+                                        </div>
+                                        <span className="text-xs">Facebook</span>
+                                    </a>
+
+                                    {/* Twitter */}
+                                    <a
+                                        href={`https://twitter.com/intent/tweet?text=Check%20out%20this%20photo%20from%20Rushel%20%26%20Sivani%27s%20wedding!&url=${encodeURIComponent(window.location.href)}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex flex-col items-center text-center"
+                                    >
+                                        <div className="w-12 h-12 rounded-full bg-blue-400 flex items-center justify-center text-white mb-2">
+                                            <Icon path={mdiTwitter} size={1.3} />
+                                        </div>
+                                        <span className="text-xs">Twitter</span>
+                                    </a>
+
+                                    {/* Email */}
+                                    <a
+                                        href={`mailto:?subject=Wedding%20Photo%20from%20Rushel%20%26%20Sivani&body=Check%20out%20this%20photo%20from%20the%20wedding:%20${encodeURIComponent(window.location.href)}`}
+                                        className="flex flex-col items-center text-center"
+                                    >
+                                        <div className="w-12 h-12 rounded-full bg-gray-600 flex items-center justify-center text-white mb-2">
+                                            <Icon path={mdiEmailOutline} size={1.3} />
+                                        </div>
+                                        <span className="text-xs">Email</span>
+                                    </a>
+                                </div>
+
+                                <div className="border-t border-gray-200 pt-4">
+                                    <p className="text-sm text-gray-600 mb-3">Or copy the link:</p>
+                                    <div className="flex">
+                                        <input
+                                            type="text"
+                                            readOnly
+                                            value={window.location.href}
+                                            className="flex-grow px-3 py-2 text-sm border border-gray-300 rounded-l-md focus:outline-none focus:ring-1 focus:ring-christian-accent"
+                                            onClick={(e) => e.target.select()}
+                                        />
+                                        <button
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(window.location.href);
+                                                alert('Link copied to clipboard!');
+                                            }}
+                                            className="px-4 py-2 bg-christian-accent text-white text-sm font-medium rounded-r-md"
+                                        >
+                                            Copy
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={() => setShareOpen(false)}
+                                    className="mt-6 w-full py-2 bg-gray-100 hover:bg-gray-200 rounded-md text-gray-800 text-sm font-medium transition-colors"
+                                >
+                                    Close
+                                </button>
+                            </motion.div>
                         </motion.div>
                     )}
                 </AnimatePresence>
