@@ -1,5 +1,5 @@
 // src/components/PhotoDetail.js
-// Erweitert mit Advanced Image Sharing
+// Kompakte Version - alles in einem Blick sichtbar
 
 import React, {useState, useEffect} from 'react';
 import {useParams, useNavigate} from 'react-router-dom';
@@ -8,7 +8,6 @@ import Icon from '@mdi/react';
 import {
     mdiArrowLeft,
     mdiDownload,
-    mdiClose,
     mdiImageOff,
     mdiRefresh,
     mdiHeart,
@@ -17,7 +16,7 @@ import {
 
 // Komponenten importieren
 import EnhancedFrameSelection from './EnhancedFrameSelection';
-import AdvancedImageSharing from './AdvancedImageSharing'; // NEUE Komponente
+import AdvancedImageSharing from './AdvancedImageSharing';
 import ClientSideFrameProcessor from './ClientSideFrameProcessor';
 import Loading from './Loading';
 
@@ -91,7 +90,6 @@ const PhotoDetail = () => {
                     setLoading(false);
                     setIsProcessingFrame(true);
 
-                    // Analytics View tracking
                     trackPhotoView(photoId);
                 } else {
                     throw new Error('Photo metadata not found');
@@ -171,7 +169,6 @@ const PhotoDetail = () => {
         setPreviewError(true);
         setIsProcessingFrame(false);
 
-        // Bei Fehler nicht zum Original zurück, sondern Standard Frame versuchen
         if (selectedFrame.id !== 'standard') {
             console.log('Falling back to standard frame');
             setSelectedFrame({
@@ -192,7 +189,6 @@ const PhotoDetail = () => {
         try {
             const downloadUrl = activePreviewUrl || photo.url;
 
-            // Wenn es eine Data-URL ist, als Blob downloaden
             if (downloadUrl.startsWith('data:')) {
                 const response = await fetch(downloadUrl);
                 const blob = await response.blob();
@@ -207,7 +203,6 @@ const PhotoDetail = () => {
 
                 URL.revokeObjectURL(url);
             } else {
-                // Normale URL
                 const link = document.createElement('a');
                 link.href = downloadUrl;
                 link.download = `rushel-sivani-wedding-${selectedFrame.id}-frame.jpg`;
@@ -216,7 +211,6 @@ const PhotoDetail = () => {
                 document.body.removeChild(link);
             }
 
-            // Analytics tracking
             await fetch('/api/analytics/download', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -227,7 +221,6 @@ const PhotoDetail = () => {
                 })
             });
 
-            // UI Updates
             const newCount = downloadCount + 1;
             setDownloadCount(newCount);
             setDownloadSuccess(true);
@@ -287,7 +280,7 @@ const PhotoDetail = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-christian-accent/10 to-hindu-accent/10 py-6 px-4">
+        <div className="min-h-screen bg-gradient-to-br from-christian-accent/10 to-hindu-accent/10 py-4 px-4">
             {/* ClientSideFrameProcessor */}
             {(isProcessingFrame || photo) && selectedFrame.frameUrl && (
                 <div className="hidden">
@@ -303,45 +296,50 @@ const PhotoDetail = () => {
                 </div>
             )}
 
-            <div className="container mx-auto max-w-2xl">
-                {/* Back Button */}
+            <div className="container mx-auto max-w-lg">
+                {/* Back Button - kompakter */}
                 <motion.button
                     initial={{opacity: 0, x: -20}}
                     animate={{opacity: 1, x: 0}}
                     transition={{duration: 0.5}}
                     onClick={handleBack}
-                    className="flex items-center text-gray-600 hover:text-christian-accent mb-6 transition-colors"
+                    className="flex items-center text-gray-600 hover:text-christian-accent mb-3 transition-colors text-sm"
                 >
-                    <Icon path={mdiArrowLeft} size={1} className="mr-2"/>
-                    <span>Back to Gallery</span>
+                    <Icon path={mdiArrowLeft} size={0.8} className="mr-1"/>
+                    <span>Zurück zur Galerie</span>
                 </motion.button>
 
-                {/* Header */}
-                <div className="bg-white/80 backdrop-blur-sm rounded-t-2xl px-6 py-4 text-center">
-                    <h1 className="text-2xl font-script text-wedding-love">Rushel & Sivani</h1>
-                    <p className="text-sm text-gray-600">Euer Hochzeitsmoment</p>
-                </div>
-
-                {/* Main Photo Display */}
+                {/* Hauptkarte - kompakter */}
                 <motion.div
                     initial={{opacity: 0, y: 20}}
                     animate={{opacity: 1, y: 0}}
-                    transition={{duration: 0.5, delay: 0.2}}
-                    className="bg-white rounded-b-2xl shadow-xl overflow-hidden"
+                    transition={{duration: 0.5}}
+                    className="bg-white rounded-2xl shadow-xl overflow-hidden"
                 >
-                    {/* Photo Container */}
+                    {/* Header - kompakter */}
+                    <div className="bg-gradient-to-r from-pink-50 to-purple-50 px-4 py-3 text-center border-b">
+                        <h1 className="text-lg font-script text-wedding-love">Rushel & Sivani</h1>
+                        <p className="text-xs text-gray-600">{formatDate(photo.timestamp, 'medium')}</p>
+                        {selectedFrame.id && !isProcessingFrame && !previewError && (
+                            <p className="text-xs text-wedding-love mt-1">
+                                {selectedFrame.frameName} Rahmen ✨
+                            </p>
+                        )}
+                    </div>
+
+                    {/* Photo Container - angepasste Höhe */}
                     <div
                         className="relative bg-gray-100 flex items-center justify-center overflow-hidden"
-                        style={{minHeight: '400px'}}
+                        style={{height: '300px'}}
                     >
                         {/* Loading placeholder */}
                         {(!imageLoaded || isProcessingFrame) && (
                             <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
                                 <div className="text-center">
                                     <div
-                                        className="animate-spin rounded-full h-12 w-12 border-4 border-t-wedding-love border-r-wedding-love border-b-transparent border-l-transparent mb-3"></div>
-                                    <p className="text-sm text-gray-600">
-                                        {isProcessingFrame ? `${selectedFrame.frameName} Rahmen wird angewendet...` : 'Foto wird geladen...'}
+                                        className="animate-spin rounded-full h-8 w-8 border-4 border-t-wedding-love border-r-wedding-love border-b-transparent border-l-transparent mb-2"></div>
+                                    <p className="text-xs text-gray-600">
+                                        {isProcessingFrame ? `${selectedFrame.frameName} wird angewendet...` : 'Lädt...'}
                                     </p>
                                 </div>
                             </div>
@@ -349,10 +347,10 @@ const PhotoDetail = () => {
 
                         {/* Frame preview error message */}
                         {previewError && (
-                            <div className="absolute top-4 left-0 right-0 flex justify-center z-10">
+                            <div className="absolute top-2 left-2 right-2 z-10">
                                 <div
-                                    className="bg-yellow-100 border border-yellow-200 text-yellow-700 px-4 py-2 rounded-lg shadow-md text-sm">
-                                    Rahmen konnte nicht geladen werden. Versuche anderen Rahmen...
+                                    className="bg-yellow-100 border border-yellow-200 text-yellow-700 px-3 py-1 rounded-lg shadow-md text-xs text-center">
+                                    Rahmen-Fehler, versuche anderen...
                                 </div>
                             </div>
                         )}
@@ -361,7 +359,7 @@ const PhotoDetail = () => {
                         <img
                             src={activePreviewUrl || photo.url}
                             alt="Wedding photo"
-                            className="max-w-full max-h-[70vh] object-contain"
+                            className="max-w-full max-h-full object-contain"
                             onLoad={() => setImageLoaded(true)}
                             onError={(e) => {
                                 console.error('Image failed to load:', e.target.src);
@@ -374,24 +372,9 @@ const PhotoDetail = () => {
                         />
                     </div>
 
-                    {/* Content */}
-                    <div className="p-6">
-                        {/* Photo Info */}
-                        <div className="text-center mb-6">
-                            <h2 className="text-xl font-semibold text-gray-800 mb-2">
-                                Euer wunderschöner Hochzeitsmoment
-                            </h2>
-                            <p className="text-gray-600">
-                                {formatDate(photo.timestamp, 'medium')}
-                            </p>
-                            {selectedFrame.id && !isProcessingFrame && !previewError && (
-                                <p className="text-sm text-wedding-love mt-1">
-                                    {selectedFrame.frameName} Rahmen angewendet ✨
-                                </p>
-                            )}
-                        </div>
-
-                        {/* Enhanced Frame Selection */}
+                    {/* Content - kompakter */}
+                    <div className="p-4 space-y-4">
+                        {/* Frame Selection - kompakter */}
                         <EnhancedFrameSelection
                             photo={photo}
                             selectedFrame={selectedFrame}
@@ -399,9 +382,9 @@ const PhotoDetail = () => {
                             isProcessing={isProcessingFrame}
                         />
 
-                        {/* Action Buttons */}
-                        <div className="space-y-3">
-                            {/* NEUE: Advanced Image Sharing */}
+                        {/* Action Buttons - nebeneinander statt untereinander */}
+                        <div className="grid grid-cols-1 gap-3">
+                            {/* Share Button */}
                             <AdvancedImageSharing
                                 photo={photo}
                                 activePreviewUrl={activePreviewUrl}
@@ -411,7 +394,7 @@ const PhotoDetail = () => {
                             {/* Download Button */}
                             <button
                                 onClick={handleDownload}
-                                className="w-full border-2 border-wedding-love text-wedding-love py-3 px-4 rounded-xl font-semibold flex items-center justify-center hover:bg-wedding-love hover:text-white transition-all"
+                                className="w-full border-2 border-wedding-love text-wedding-love py-2.5 px-4 rounded-xl font-semibold flex items-center justify-center hover:bg-wedding-love hover:text-white transition-all text-sm"
                                 disabled={isProcessingFrame}
                             >
                                 <AnimatePresence mode="wait">
@@ -423,7 +406,7 @@ const PhotoDetail = () => {
                                             exit={{scale: 0.5, opacity: 0}}
                                             className="mr-2 text-green-500"
                                         >
-                                            <Icon path={mdiCheckCircle} size={1}/>
+                                            <Icon path={mdiCheckCircle} size={0.9}/>
                                         </motion.div>
                                     ) : (
                                         <motion.div
@@ -433,7 +416,7 @@ const PhotoDetail = () => {
                                             exit={{scale: 0.5, opacity: 0}}
                                             className="mr-2"
                                         >
-                                            <Icon path={mdiDownload} size={1}/>
+                                            <Icon path={mdiDownload} size={0.9}/>
                                         </motion.div>
                                     )}
                                 </AnimatePresence>
@@ -442,33 +425,24 @@ const PhotoDetail = () => {
                                 </span>
                             </button>
                         </div>
-
-                        {/* Info Box für Bild-Sharing */}
-                        {/*<div className="mt-4 p-3 bg-blue-50 rounded-lg">*/}
-                        {/*    <p className="text-sm text-blue-800 text-center">*/}
-                        {/*        📸 <strong>Neu:</strong> Das geframte Foto wird direkt geteilt - nicht nur der Link!*/}
-                        {/*    </p>*/}
-                        {/*</div>*/}
                     </div>
                 </motion.div>
 
-                {/* Thank You Message */}
+                {/* Thank You Message - deutlich kompakter */}
                 <motion.div
                     initial={{opacity: 0}}
                     animate={{opacity: 1}}
                     transition={{delay: 0.6}}
-                    className="bg-white rounded-2xl shadow-lg p-6 text-center mt-6"
+                    className="bg-white rounded-xl shadow-lg p-4 text-center mt-4"
                 >
-                    <Icon path={mdiHeart} size={2} className="text-wedding-love mx-auto mb-3"/>
-                    <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                        Vielen Dank für eure Teilnahme! 💕
+                    <Icon path={mdiHeart} size={1.5} className="text-wedding-love mx-auto mb-2"/>
+                    <h3 className="text-base font-semibold text-gray-800 mb-1">
+                        Vielen Dank! 💕
                     </h3>
-                    <p className="text-gray-600 text-sm">
-                        Ihr habt unseren besonderen Tag noch schöner gemacht.
-                        Wir hoffen, ihr bewahrt diese Erinnerung genauso gerne auf wie wir!
+                    <p className="text-gray-600 text-xs">
+                        Ihr habt unseren Tag noch schöner gemacht!
                     </p>
                 </motion.div>
-
             </div>
         </div>
     );

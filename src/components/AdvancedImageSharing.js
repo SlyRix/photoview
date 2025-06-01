@@ -1,5 +1,5 @@
 // src/components/AdvancedImageSharing.js
-// Erweiterte Share-Funktionen die das tatsächliche Bild teilen
+// Kompakte Version - nur der Haupt-Share-Button
 
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -24,7 +24,6 @@ const AdvancedImageSharing = ({ photo, activePreviewUrl, selectedFrame }) => {
     const [shareSuccess, setShareSuccess] = useState(false);
     const [shareCount, setShareCount] = useState(0);
     const [isGeneratingImage, setIsGeneratingImage] = useState(false);
-    const canvasRef = useRef(null);
 
     // Analytics tracking für Shares
     const trackShare = async (platform, message = '', sharedImage = false) => {
@@ -36,7 +35,7 @@ const AdvancedImageSharing = ({ photo, activePreviewUrl, selectedFrame }) => {
                     photoId: photo.id,
                     platform,
                     message: message.substring(0, 100),
-                    sharedImage: sharedImage, // Track ob Bild oder Link geteilt wurde
+                    sharedImage: sharedImage,
                     frameId: selectedFrame?.id,
                     timestamp: Date.now()
                 })
@@ -53,28 +52,22 @@ const AdvancedImageSharing = ({ photo, activePreviewUrl, selectedFrame }) => {
         try {
             setIsGeneratingImage(true);
 
-            // Wenn wir bereits eine Preview-URL haben, diese verwenden
             if (activePreviewUrl && activePreviewUrl.startsWith('data:')) {
-                // Data URL zu Blob konvertieren
                 const response = await fetch(activePreviewUrl);
                 const blob = await response.blob();
                 return blob;
             }
 
-            // Andernfalls Canvas verwenden um Foto mit Frame zu erstellen
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
 
-            // Original Foto laden
             const photoImg = await loadImage(photo.url);
 
-            // Frame laden (falls vorhanden)
             let frameImg = null;
             if (selectedFrame?.frameUrl) {
                 frameImg = await loadImage(selectedFrame.frameUrl);
             }
 
-            // Canvas-Größe setzen
             if (frameImg) {
                 canvas.width = frameImg.width;
                 canvas.height = frameImg.height;
@@ -83,12 +76,10 @@ const AdvancedImageSharing = ({ photo, activePreviewUrl, selectedFrame }) => {
                 canvas.height = photoImg.height;
             }
 
-            // Weißer Hintergrund
             ctx.fillStyle = 'white';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             if (frameImg) {
-                // Foto skaliert in Frame einzeichnen
                 const scaleFactor = 0.95;
                 const photoWidth = canvas.width * scaleFactor;
                 const photoHeight = canvas.height * scaleFactor;
@@ -98,11 +89,9 @@ const AdvancedImageSharing = ({ photo, activePreviewUrl, selectedFrame }) => {
                 ctx.drawImage(photoImg, x, y, photoWidth, photoHeight);
                 ctx.drawImage(frameImg, 0, 0);
             } else {
-                // Ohne Frame - nur das Foto
                 ctx.drawImage(photoImg, 0, 0, canvas.width, canvas.height);
             }
 
-            // Canvas zu Blob konvertieren
             return new Promise((resolve) => {
                 canvas.toBlob((blob) => {
                     resolve(blob);
@@ -131,7 +120,6 @@ const AdvancedImageSharing = ({ photo, activePreviewUrl, selectedFrame }) => {
     // Native Share API mit Bild
     const handleNativeImageShare = async () => {
         try {
-            // Prüfen ob File-Sharing unterstützt wird
             if (navigator.share && navigator.canShare) {
                 const imageBlob = await generateImageBlob();
                 const imageFile = new File([imageBlob], `rushel-sivani-wedding-${selectedFrame?.id || 'photo'}.jpg`, {
@@ -144,7 +132,6 @@ const AdvancedImageSharing = ({ photo, activePreviewUrl, selectedFrame }) => {
                     files: [imageFile]
                 };
 
-                // Prüfen ob diese Share-Daten unterstützt werden
                 if (navigator.canShare(shareData)) {
                     await navigator.share(shareData);
                     await trackShare('native-image', personalMessage, true);
@@ -155,11 +142,9 @@ const AdvancedImageSharing = ({ photo, activePreviewUrl, selectedFrame }) => {
                 }
             }
 
-            // Fallback: Nur Link teilen
             return await handleNativeLinkShare();
         } catch (error) {
             console.log('Native image share failed:', error);
-            // Fallback zu Modal
             setShowShareModal(true);
             return false;
         }
@@ -189,15 +174,13 @@ const AdvancedImageSharing = ({ photo, activePreviewUrl, selectedFrame }) => {
         return false;
     };
 
-    // WhatsApp mit Bild (falls möglich)
+    // WhatsApp mit Bild
     const shareImageToWhatsApp = async () => {
         try {
-            // Für mobile Geräte - versuche das Bild zu teilen
             if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
                 const imageBlob = await generateImageBlob();
                 const imageFile = new File([imageBlob], 'wedding-photo.jpg', { type: 'image/jpeg' });
 
-                // Versuche Web Share API mit WhatsApp
                 if (navigator.share && navigator.canShare) {
                     const shareData = {
                         title: 'Hochzeitsfoto',
@@ -213,7 +196,6 @@ const AdvancedImageSharing = ({ photo, activePreviewUrl, selectedFrame }) => {
                     }
                 }
 
-                // Fallback: Bild downloaden und WhatsApp öffnen
                 const url = URL.createObjectURL(imageBlob);
                 const link = document.createElement('a');
                 link.href = url;
@@ -221,7 +203,6 @@ const AdvancedImageSharing = ({ photo, activePreviewUrl, selectedFrame }) => {
                 link.click();
                 URL.revokeObjectURL(url);
 
-                // Dann WhatsApp öffnen
                 setTimeout(() => {
                     const message = `${personalMessage || 'Schaut euch unser Foto von Rushel & Sivanis Hochzeit an! 💕'}\n\nFoto wurde heruntergeladen 📱`;
                     const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
@@ -230,18 +211,16 @@ const AdvancedImageSharing = ({ photo, activePreviewUrl, selectedFrame }) => {
 
                 await trackShare('whatsapp-download', personalMessage, true);
             } else {
-                // Desktop: Link teilen
                 shareToWhatsAppLink();
             }
         } catch (error) {
             console.error('WhatsApp image share failed:', error);
-            shareToWhatsAppLink(); // Fallback zu Link
+            shareToWhatsAppLink();
         }
 
         setShowShareModal(false);
     };
 
-    // WhatsApp Link teilen (Fallback)
     const shareToWhatsAppLink = async () => {
         const message = personalMessage || 'Schaut euch unser wunderschönes Foto von Rushel & Sivanis Hochzeit an! 💕';
         const fullMessage = `${message}\n\n${window.location.href}`;
@@ -253,10 +232,8 @@ const AdvancedImageSharing = ({ photo, activePreviewUrl, selectedFrame }) => {
         setShowShareModal(false);
     };
 
-    // Instagram mit Bild
     const shareImageToInstagram = async () => {
         try {
-            // Bild downloaden für manuelles Teilen
             const imageBlob = await generateImageBlob();
             const url = URL.createObjectURL(imageBlob);
             const link = document.createElement('a');
@@ -265,7 +242,6 @@ const AdvancedImageSharing = ({ photo, activePreviewUrl, selectedFrame }) => {
             link.click();
             URL.revokeObjectURL(url);
 
-            // Instagram öffnen
             setTimeout(() => {
                 if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
                     try {
@@ -280,7 +256,6 @@ const AdvancedImageSharing = ({ photo, activePreviewUrl, selectedFrame }) => {
 
             await trackShare('instagram-image', personalMessage, true);
 
-            // Info-Message zeigen
             alert('📸 Foto wurde heruntergeladen!\n\nÖffnet jetzt Instagram und wählt das Foto aus eurer Galerie aus.');
 
         } catch (error) {
@@ -291,10 +266,8 @@ const AdvancedImageSharing = ({ photo, activePreviewUrl, selectedFrame }) => {
         setShowShareModal(false);
     };
 
-    // Facebook mit Bild-Download
     const shareImageToFacebook = async () => {
         try {
-            // Bild downloaden
             const imageBlob = await generateImageBlob();
             const url = URL.createObjectURL(imageBlob);
             const link = document.createElement('a');
@@ -303,7 +276,6 @@ const AdvancedImageSharing = ({ photo, activePreviewUrl, selectedFrame }) => {
             link.click();
             URL.revokeObjectURL(url);
 
-            // Facebook öffnen
             setTimeout(() => {
                 const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`;
                 window.open(facebookUrl, '_blank', 'width=600,height=400');
@@ -322,10 +294,8 @@ const AdvancedImageSharing = ({ photo, activePreviewUrl, selectedFrame }) => {
         setShowShareModal(false);
     };
 
-    // Email mit Bild als Anhang (Download)
     const shareImageToEmail = async () => {
         try {
-            // Bild downloaden
             const imageBlob = await generateImageBlob();
             const url = URL.createObjectURL(imageBlob);
             const link = document.createElement('a');
@@ -334,7 +304,6 @@ const AdvancedImageSharing = ({ photo, activePreviewUrl, selectedFrame }) => {
             link.click();
             URL.revokeObjectURL(url);
 
-            // Email öffnen
             setTimeout(() => {
                 const subject = 'Hochzeitsfoto von Rushel & Sivani';
                 const body = `${personalMessage || 'Schaut euch unser wunderschönes Foto von der Hochzeit an!'}\n\nDas Foto wurde heruntergeladen und kann als Anhang hinzugefügt werden.\n\nLink: ${window.location.href}`;
@@ -347,7 +316,6 @@ const AdvancedImageSharing = ({ photo, activePreviewUrl, selectedFrame }) => {
 
         } catch (error) {
             console.error('Email image share failed:', error);
-            // Fallback zu normalem Email
             const subject = 'Hochzeitsfoto von Rushel & Sivani';
             const body = `${personalMessage || 'Schaut euch unser wunderschönes Foto von der Hochzeit an!'}\n\n${window.location.href}`;
             const emailUrl = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
@@ -357,7 +325,6 @@ const AdvancedImageSharing = ({ photo, activePreviewUrl, selectedFrame }) => {
         setShowShareModal(false);
     };
 
-    // Link kopieren
     const copyLink = async () => {
         try {
             await navigator.clipboard.writeText(window.location.href);
@@ -377,7 +344,7 @@ const AdvancedImageSharing = ({ photo, activePreviewUrl, selectedFrame }) => {
 
     return (
         <>
-            {/* Main Share Button */}
+            {/* Nur der Haupt-Share-Button - keine einzelnen Icons mehr */}
             <button
                 onClick={handleNativeImageShare}
                 disabled={isGeneratingImage}
@@ -409,52 +376,14 @@ const AdvancedImageSharing = ({ photo, activePreviewUrl, selectedFrame }) => {
                     )}
                 </AnimatePresence>
                 <span>
-          {isGeneratingImage
-              ? 'Bereite Foto vor...'
-              : shareSuccess
-                  ? 'Foto geteilt! 🎉'
-                  : `Foto teilen${shareCount > 0 ? ` (${shareCount})` : ''}`
-          }
-        </span>
+                    {isGeneratingImage
+                        ? 'Bereite Foto vor...'
+                        : shareSuccess
+                            ? 'Foto geteilt! 🎉'
+                            : `Foto teilen${shareCount > 0 ? ` (${shareCount})` : ''}`
+                    }
+                </span>
             </button>
-
-            {/* Quick Share Buttons */}
-            <div className="grid grid-cols-4 gap-2 mt-3">
-                <button
-                    onClick={shareImageToWhatsApp}
-                    disabled={isGeneratingImage}
-                    className="bg-green-500 text-white py-2 px-3 rounded-lg flex items-center justify-center hover:bg-green-600 transition-colors disabled:opacity-50"
-                    title="WhatsApp - Foto teilen"
-                >
-                    <Icon path={mdiWhatsapp} size={0.9} />
-                </button>
-
-                <button
-                    onClick={shareImageToInstagram}
-                    disabled={isGeneratingImage}
-                    className="bg-gradient-to-r from-purple-500 to-pink-500 text-white py-2 px-3 rounded-lg flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-50"
-                    title="Instagram - Foto downloaden"
-                >
-                    <Icon path={mdiInstagram} size={0.9} />
-                </button>
-
-                <button
-                    onClick={shareImageToFacebook}
-                    disabled={isGeneratingImage}
-                    className="bg-blue-600 text-white py-2 px-3 rounded-lg flex items-center justify-center hover:bg-blue-700 transition-colors disabled:opacity-50"
-                    title="Facebook - Foto downloaden"
-                >
-                    <Icon path={mdiFacebook} size={0.9} />
-                </button>
-
-                <button
-                    onClick={copyLink}
-                    className="bg-gray-500 text-white py-2 px-3 rounded-lg flex items-center justify-center hover:bg-gray-600 transition-colors"
-                    title="Link kopieren"
-                >
-                    <Icon path={mdiContentCopy} size={0.9} />
-                </button>
-            </div>
 
             {/* Share Modal */}
             <AnimatePresence>
