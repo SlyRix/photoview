@@ -715,6 +715,212 @@ app.post('/api/upload-photo', checkApiKey, (req, res) => {
         }
     });
 });
+// ======================================
+// ANALYTICS ENDPOINTS - Add these to your server.js
+// ======================================
+
+// Analytics tracking endpoint
+app.post('/api/analytics/:action', async (req, res) => {
+    try {
+        const { action } = req.params;
+        const { photoId, frameId, platform, message, timestamp } = req.body;
+
+        if (!photoId) {
+            return res.status(400).json({ success: false, error: 'Missing photoId' });
+        }
+
+        const metadataPath = path.join(DATA_DIR, `${photoId}.json`);
+
+        if (await fs.pathExists(metadataPath)) {
+            const metadata = await fs.readJson(metadataPath);
+
+            if (!metadata.analytics) {
+                metadata.analytics = {
+                    views: 0,
+                    downloads: 0,
+                    shares: 0,
+                    framesApplied: [],
+                    shareHistory: [],
+                    viewHistory: []
+                };
+            }
+
+            switch (action) {
+                case 'view':
+                    metadata.analytics.views++;
+                    metadata.analytics.lastViewed = timestamp || Date.now();
+                    break;
+
+                case 'download':
+                    metadata.analytics.downloads++;
+                    metadata.analytics.lastDownload = timestamp || Date.now();
+                    if (frameId) metadata.analytics.downloadedFrame = frameId;
+                    break;
+
+                case 'share':
+                    metadata.analytics.shares++;
+                    metadata.analytics.lastShare = timestamp || Date.now();
+                    metadata.analytics.shareHistory.push({
+                        platform: platform || 'unknown',
+                        timestamp: timestamp || Date.now(),
+                        message: message ? message.substring(0, 100) : '',
+                        ip: req.ip
+                    });
+                    break;
+
+                case 'frame-used':
+                    if (frameId && !metadata.analytics.framesApplied.includes(frameId)) {
+                        metadata.analytics.framesApplied.push(frameId);
+                    }
+                    metadata.analytics.lastFrameChange = timestamp || Date.now();
+                    break;
+
+                default:
+                    return res.status(400).json({ success: false, error: 'Invalid action' });
+            }
+
+            await fs.writeJson(metadataPath, metadata);
+            console.log(`Analytics tracked: ${action} for photo ${photoId}`);
+        } else {
+            console.warn(`Metadata file not found for photo ${photoId}`);
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Analytics error:', error);
+        res.status(500).json({ success: false, error: 'Analytics update failed' });
+    }
+});
+
+// Analytics summary for admin
+app.get('/api/admin/analytics-summary', checkApiKey, async (req, res) => {
+    try {
+        const dataFiles = await fs.readdir(DATA_DIR);
+        const jsonFiles = dataFiles.filter(file => file.endsWith('.json'));
+
+        const summary = {
+            totalPhotos: jsonFiles.length,
+            totalViews: 0,
+            totalDownloads: 0,
+            totalShares: 0,
+            popularFrames: {},
+            recentActivity: []
+        };
+
+        for (const file of jsonFiles) {
+            try {
+                const metadata = await fs.readJson(path.join(DATA_DIR, file));
+                const analytics = metadata.analytics || {};
+
+                summary.totalViews += analytics.views || 0;
+                summary.totalDownloads += analytics.downloads || 0;
+                summary.totalShares += analytics.shares || 0;
+
+                if (analytics.framesApplied) {
+                    analytics.framesApplied.forEach(frame => {
+                        summary.popularFrames[frame] = (summary.popularFrames[frame] || 0) + 1;
+                    });
+                }
+
+                const lastActivity = Math.max(
+                    analytics.lastViewed || 0,
+                    analytics.lastDownload || 0,
+                    analytics.lastShare || 0
+                );
+
+                if (lastActivity > 0) {
+                    summary.recentActivity.push({
+                        photoId: metadata.photoId || file.replace('.json', ''),
+                        lastActivity,
+                        views: analytics.views || 0,
+                        downloads: analytics.downloads || 0,
+                        shares: analytics.shares || 0
+                    });
+                }
+            } catch (err) {
+                console.warn(`Error processing ${file}:`, err.message);
+            }
+        }
+
+        summary.recentActivity.sort((a, b) => b.lastActivity - a.lastActivity);
+        summary.recentActivity = summary.recentActivity.slice(0, 10);
+
+        console.log('Analytics summary generated:', summary);
+        res.json(summary);
+    } catch (error) {
+        console.error('Analytics summary error:', error);
+        res.status(500).json({ success: false, error: 'Failed to generate analytics summary' });
+    }
+});
+
+app.get('/api/analytics/:photoId', async (req, res) => {
+    try {
+        const { photoId } = req.params;
+        const metadataPath = path.join(DATA_DIR, `${photoId}.json`);
+
+        if (await fs.pathExists(metadataPath)) {
+            const metadata = await fs.readJson(metadataPath);
+            res.json({
+                success: true,
+                analytics: metadata.analytics || {
+                    views: 0,
+                    downloads: 0,
+                    shares: 0,
+                    framesApplied: []
+                }
+            });
+        } else {
+            res.status(404).json({ success: false, error: 'Photo not found' });
+        }
+    } catch (error) {
+        console.error('Analytics fetch error:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch analytics' });
+    }
+});
+
+// Helper function to clean old analytics data (optional - run periodically)
+const cleanOldAnalytics = async () => {
+    try {
+        const dataFiles = await fs.readdir(DATA_DIR);
+        const jsonFiles = dataFiles.filter(file => file.endsWith('.json'));
+
+        const cutoffDate = Date.now() - (30 * 24 * 60 * 60 * 1000); // 30 days ago
+
+        for (const file of jsonFiles) {
+            try {
+                const metadata = await fs.readJson(path.join(DATA_DIR, file));
+
+                if (metadata.analytics) {
+                    // Clean old view history (keep only last 100 views)
+                    if (metadata.analytics.viewHistory && metadata.analytics.viewHistory.length > 100) {
+                        metadata.analytics.viewHistory = metadata.analytics.viewHistory
+                            .sort((a, b) => b.timestamp - a.timestamp)
+                            .slice(0, 100);
+                    }
+
+                    // Clean old share history (keep only last 50 shares)
+                    if (metadata.analytics.shareHistory && metadata.analytics.shareHistory.length > 50) {
+                        metadata.analytics.shareHistory = metadata.analytics.shareHistory
+                            .sort((a, b) => b.timestamp - a.timestamp)
+                            .slice(0, 50);
+                    }
+
+                    // Save cleaned metadata
+                    await fs.writeJson(path.join(DATA_DIR, file), metadata);
+                }
+            } catch (err) {
+                console.warn(`Error cleaning analytics for ${file}:`, err.message);
+            }
+        }
+
+        console.log('Analytics cleanup completed');
+    } catch (error) {
+        console.error('Analytics cleanup error:', error);
+    }
+};
+setInterval(cleanOldAnalytics, 7 * 24 * 60 * 60 * 1000); // Every 7 days
+
+
 
 // Serve static files
 app.use('/photos', express.static(PHOTOS_DIR));
@@ -843,3 +1049,7 @@ process.on('unhandledRejection', (reason, promise) => {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
     // Log but don't exit - improves stability
 });
+
+module.exports = {
+    cleanOldAnalytics
+};

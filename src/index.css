@@ -4,16 +4,168 @@
 
 @media screen and (max-width: 768px) {
   html {
-    /* touch-action: none; <- This was causing the scrolling issue */
     touch-action: pan-y; /* Allow vertical scrolling */
     -webkit-overflow-scrolling: touch; /* Enable momentum scrolling on iOS */
   }
 
   body {
     overflow-y: auto; /* Ensure vertical scrolling is enabled */
+    -webkit-text-size-adjust: 100%; /* Prevent text scaling on rotate */
+  }
+
+  /* Better tap targets for mobile */
+  button, a, input, textarea {
+    touch-action: manipulation; /* Remove 300ms delay on tap */
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1); /* Custom tap highlight */
+  }
+
+  /* Optimize images for mobile */
+  img {
+    max-width: 100%;
+    height: auto;
+    -webkit-touch-callout: none; /* Disable image save on long press */
   }
 }
 
+/* Mobile-first responsive utilities */
+@media screen and (max-width: 640px) {
+  .container {
+    @apply px-3; /* Reduce padding on small screens */
+  }
+
+  /* Smaller text on mobile for compact layout */
+  .mobile-compact h1 {
+    @apply text-lg;
+  }
+
+  .mobile-compact h2 {
+    @apply text-base;
+  }
+
+  .mobile-compact h3 {
+    @apply text-sm;
+  }
+
+  /* Optimize buttons for mobile */
+  .btn {
+    @apply py-3 px-4 text-sm; /* Larger tap target, smaller text */
+    min-height: 44px; /* Apple's recommended minimum tap target */
+  }
+
+  /* Compact cards for mobile */
+  .mobile-card {
+    @apply rounded-xl shadow-lg;
+    padding: 1rem;
+  }
+
+  /* Better spacing for mobile layouts */
+  .mobile-spacing > * + * {
+    margin-top: 0.75rem;
+  }
+
+  .mobile-spacing-sm > * + * {
+    margin-top: 0.5rem;
+  }
+}
+
+/* PhotoDetail specific mobile optimizations */
+.photo-detail-mobile {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+.photo-detail-mobile .photo-container {
+  max-height: 70vh; /* Don't let photo take more than 70% of viewport */
+  width: 100%;
+  object-fit: contain;
+}
+
+/* Ensure no horizontal scrolling on mobile */
+html, body {
+  overflow-x: hidden;
+}
+
+/* Better mobile form elements */
+@media screen and (max-width: 768px) {
+  input, textarea, select {
+    @apply text-base; /* Prevent zoom on focus in iOS */
+    border-radius: 8px;
+    padding: 12px;
+  }
+
+  /* Improve mobile modals */
+  .modal-mobile {
+    max-height: 90vh;
+    overflow-y: auto;
+    margin: 5vh auto;
+  }
+}
+
+/* Photo loading states for mobile */
+.photo-loading {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Mobile-optimized shadows */
+@media screen and (max-width: 768px) {
+  .shadow-card {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .shadow-lg {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+}
+
+/* Prevent text selection on UI elements */
+.no-select {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* Mobile-friendly gradients */
+.mobile-gradient-bg {
+  background: linear-gradient(135deg, #fdf2f8 0%, #f3e8ff 100%);
+  min-height: 100vh;
+}
+
+/* Optimize for iPhone safe area */
+@supports (padding: max(0px)) {
+  .safe-area-top {
+    padding-top: max(8px, env(safe-area-inset-top));
+  }
+
+  .safe-area-bottom {
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+  }
+}
+
+/* Better mobile typography */
+@media screen and (max-width: 640px) {
+  .mobile-text {
+    line-height: 1.4;
+    letter-spacing: 0.01em;
+  }
+
+  .mobile-text-sm {
+    font-size: 0.875rem;
+    line-height: 1.3;
+  }
+
+  .mobile-text-xs {
+    font-size: 0.75rem;
+    line-height: 1.2;
+  }
+}
 /* Make sure the main containers don't restrict scrolling */
 #root, .App {
   min-height: 100%;
